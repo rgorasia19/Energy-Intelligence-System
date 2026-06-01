@@ -1,0 +1,60 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-01T06:59:51.686532",
+    "datastore_active": true,
+    "description": null,
+    "format": "CSV",
+    "hash": "",
+    "id": "cf70b268-1965-45c1-a55a-5209206067f3",
+    "last_modified": "2026-05-01T08:00:32.066301",
+    "metadata_modified": "2026-05-01T08:00:32.094297",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Rota Load Disconnection",
+    "outboundFile": "<starlette.datastructures.UploadFile object at 0x7fadcb7fdd60>",
+    "package_id": "b2fc00b2-304a-416f-9851-ba56cf904a50",
+    "position": 0,
+    "resource_type": null,
+    "restricted_level": "only_allowed_users",
+    "size": 7923471,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2024-07-30T09:47:57.010351",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:08:43.161920",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "78822b7d-c4fa-4da1-82ff-569ecd592919",
+    "last_modified": "2024-11-13T12:47:34.064622",
+    "metadata_modified": "2024-11-13T12:47:34.093171",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "b2fc00b2-304a-416f-9851-ba56cf904a50",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 39693,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/b2fc00b2-304a-416f-9851-ba56cf904a50/resource/78822b7d-c4fa-4da1-82ff-569ecd592919/download/dsa039-rota-load-disconnection.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

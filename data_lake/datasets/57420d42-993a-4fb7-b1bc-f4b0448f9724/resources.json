@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:39:52.399440",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "6a8a9168-55cb-4888-87be-1e4d4bcc01e4",
+    "last_modified": "2024-06-24T21:08:35.125845",
+    "metadata_modified": "2024-06-24T21:08:35.152532",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "57420d42-993a-4fb7-b1bc-f4b0448f9724",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71832,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/57420d42-993a-4fb7-b1bc-f4b0448f9724/resource/6a8a9168-55cb-4888-87be-1e4d4bcc01e4/download/dsa075-11kv-transformers.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

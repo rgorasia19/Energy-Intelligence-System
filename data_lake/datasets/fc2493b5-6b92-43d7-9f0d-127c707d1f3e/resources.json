@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:41:53.892513",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "b2ceaa9b-022f-4c0f-82b7-907cc3c7637b",
+    "last_modified": "2024-06-24T21:21:13.874411",
+    "metadata_modified": "2024-06-24T21:21:13.891265",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "fc2493b5-6b92-43d7-9f0d-127c707d1f3e",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71821,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/fc2493b5-6b92-43d7-9f0d-127c707d1f3e/resource/b2ceaa9b-022f-4c0f-82b7-907cc3c7637b/download/dsa058-33kv-overhead-lines.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

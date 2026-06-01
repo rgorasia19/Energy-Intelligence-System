@@ -1,0 +1,60 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-05-02T10:40:30.322340",
+    "datastore_active": true,
+    "description": "https://www.nationalgrid.co.uk/network-opportunity-map-application/\r\n\r\n__Data Quality Caveat__\r\n\r\nWe have developed the Network Opportunity Map dataset to assist you with connection applications in constrained areas and indicate where distribution connection opportunities may be available. For detailed information on transmission capacity please visit our Clearview Connect tool.\r\nThe dataset gives a general illustration of potential connection opportunities and should not be relied upon to assess the terms of connection for specific premises. Whilst we use reasonable endeavours to ensure that the Network Opportunity Map and related information is accurate, we do not warrant, and do not accept any responsibility or liability for, the accuracy or completeness of the content or for any loss which may arise from reliance on the Network Opportunity Map or related information. The terms and conditions for use of our website apply to the Network Opportunity Map and related information.\r\n",
+    "format": "CSV",
+    "hash": "",
+    "id": "d1963858-d451-4794-a6bf-123fad0f0b3a",
+    "last_modified": "2026-04-02T11:47:36.196240",
+    "metadata_modified": "2026-04-02T11:47:36.216314",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Network Opportunity Map Headroom",
+    "package_id": "c72bb09a-56d3-4863-bf68-0c83e4dc29db",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "registered",
+    "size": 20338056,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2026-04-02T12:03:44.750282",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-05-02T10:49:35.675227",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "32380b19-e4e9-4d17-81ef-ef8aa009d232",
+    "last_modified": "2025-05-02T10:49:35.633788",
+    "metadata_modified": "2025-06-09T14:37:07.324901",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "c72bb09a-56d3-4863-bf68-0c83e4dc29db",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 148442,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/c72bb09a-56d3-4863-bf68-0c83e4dc29db/resource/32380b19-e4e9-4d17-81ef-ef8aa009d232/download/data-sharing-assessment_nom.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

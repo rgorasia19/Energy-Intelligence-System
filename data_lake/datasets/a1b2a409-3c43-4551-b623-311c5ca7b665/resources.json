@@ -1,0 +1,59 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-12-12T13:44:25.541911",
+    "datastore_active": true,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "88906436-9c30-465f-a5f5-6800263e8d05",
+    "last_modified": "2025-12-12T13:44:25.488803",
+    "metadata_modified": "2025-12-12T13:44:25.523662",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "NGED Connections Reform Register",
+    "package_id": "a1b2a409-3c43-4551-b623-311c5ca7b665",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 10570867,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/a1b2a409-3c43-4551-b623-311c5ca7b665/resource/88906436-9c30-465f-a5f5-6800263e8d05/download/251212_cdpdata_nged-connections-reform-register.csv",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2025-12-12T16:37:48.416904",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-12-12T16:44:32.820523",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "742af341-6a2d-486e-b33e-2bd226d88733",
+    "last_modified": "2025-12-12T16:44:32.769683",
+    "metadata_modified": "2025-12-12T16:44:32.804523",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "DSA097 - NGED Connections Reform Register.pdf",
+    "package_id": "a1b2a409-3c43-4551-b623-311c5ca7b665",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 264488,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/a1b2a409-3c43-4551-b623-311c5ca7b665/resource/742af341-6a2d-486e-b33e-2bd226d88733/download/dsa097-nged-connections-reform-register.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

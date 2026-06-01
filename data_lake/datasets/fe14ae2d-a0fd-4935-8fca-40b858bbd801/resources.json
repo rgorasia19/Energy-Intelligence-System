@@ -1,0 +1,59 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-01T07:29:48.794744",
+    "datastore_active": true,
+    "description": null,
+    "format": "CSV",
+    "hash": "",
+    "id": "ee52490e-1753-4cc2-a5a8-453f588fde00",
+    "last_modified": "2026-05-01T08:00:50.201547",
+    "metadata_modified": "2026-05-01T08:00:50.227509",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "LCT Connections",
+    "outboundFile": "<starlette.datastructures.UploadFile object at 0x7fadca3b0070>",
+    "package_id": "fe14ae2d-a0fd-4935-8fca-40b858bbd801",
+    "position": 0,
+    "resource_type": null,
+    "restricted_level": "registered",
+    "size": 5297252,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2025-02-01T09:07:57.506868",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T18:46:13.919981",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "1a6f6525-9c21-42e5-95b9-bc3b751c94c5",
+    "last_modified": "2024-06-05T18:46:13.881429",
+    "metadata_modified": "2024-06-08T04:08:42.670337",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "fe14ae2d-a0fd-4935-8fca-40b858bbd801",
+    "position": 1,
+    "resource_type": null,
+    "restricted_level": "public",
+    "size": 39578,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/fe14ae2d-a0fd-4935-8fca-40b858bbd801/resource/1a6f6525-9c21-42e5-95b9-bc3b751c94c5/download/dsa023-lct-connections.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

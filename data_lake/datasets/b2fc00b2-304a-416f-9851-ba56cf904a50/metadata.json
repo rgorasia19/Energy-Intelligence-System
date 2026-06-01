@@ -1,0 +1,143 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "coverage": "All Regions",
+  "createddate": "2022-11-21",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "56ec6545-13ba-4212-8933-8d31020d246f",
+  "dataclassification": "Closed",
+  "expirationdate": "",
+  "id": "b2fc00b2-304a-416f-9851-ba56cf904a50",
+  "identifier": "ngedrld",
+  "isopen": false,
+  "language": "EN",
+  "license_id": "",
+  "license_title": "",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2022-11-29T11:39:21.515522",
+  "metadata_modified": "2026-05-01T08:00:32.085476",
+  "name": "rota-load-disconnection",
+  "notes": "The Electricity Supply Emergency Code (ESEC) describes steps which the UK Government could take to deal with a civil or electricity supply emergency, and the actions which companies in the electricity industry should plan to take and which may be required to deal with such emergencies.\r\n\r\nIn the event of an emergency, ESEC enables an equal distribution of electricity supply to customers as far as reasonably practicable, whilst ensuring that pre-designated Protected Sites maintain supplies for as long as possible.\r\n\r\nThe rota load scheme provides 18 plans, that set out the level and sequence of load block disconnections and reconnections.",
+  "num_resources": 2,
+  "num_tags": 3,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://connecteddata.nationalgrid.co.uk/base/images/logo.svg",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "National Grid Electricity Distribution",
+  "relation": "-",
+  "rights": "WPD Open Data Licence",
+  "state": "active",
+  "title": "Rota Load Disconnection",
+  "type": "dataset",
+  "updatefrequency": "12 Months",
+  "url": "",
+  "version": null,
+  "groups": [
+    {
+      "description": "Information and data related to network assets and system operation; for example the various Long Term Development Statement tables.",
+      "display_name": "System and Network",
+      "id": "6383a365-e64c-4565-a77a-b39c8a3d4618",
+      "image_display_url": "",
+      "name": "system-and-network",
+      "title": "System and Network"
+    }
+  ],
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-01T06:59:51.686532",
+      "datastore_active": true,
+      "description": null,
+      "format": "CSV",
+      "hash": "",
+      "id": "cf70b268-1965-45c1-a55a-5209206067f3",
+      "last_modified": "2026-05-01T08:00:32.066301",
+      "metadata_modified": "2026-05-01T08:00:32.094297",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "Rota Load Disconnection",
+      "outboundFile": "<starlette.datastructures.UploadFile object at 0x7fadcb7fdd60>",
+      "package_id": "b2fc00b2-304a-416f-9851-ba56cf904a50",
+      "position": 0,
+      "resource_type": null,
+      "restricted_level": "only_allowed_users",
+      "size": 7923471,
+      "state": "active",
+      "url": "redacted",
+      "url_type": "upload",
+      "wpd_datastore_last_updated": "EXTRA-2024-07-30T09:47:57.010351",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      },
+      "restricted": "redacted"
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-05T19:08:43.161920",
+      "datastore_active": false,
+      "description": "",
+      "format": "PDF",
+      "hash": "",
+      "id": "78822b7d-c4fa-4da1-82ff-569ecd592919",
+      "last_modified": "2024-11-13T12:47:34.064622",
+      "metadata_modified": "2024-11-13T12:47:34.093171",
+      "mimetype": "application/pdf",
+      "mimetype_inner": null,
+      "name": "Data Sharing Assessment",
+      "package_id": "b2fc00b2-304a-416f-9851-ba56cf904a50",
+      "position": 1,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": 39693,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/b2fc00b2-304a-416f-9851-ba56cf904a50/resource/78822b7d-c4fa-4da1-82ff-569ecd592919/download/dsa039-rota-load-disconnection.pdf",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "ESEC",
+      "id": "053be846-4846-4b2b-8ea5-1ea3383db422",
+      "name": "ESEC",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "RLD",
+      "id": "8421b92c-5c87-4822-a060-710dfdd747bc",
+      "name": "RLD",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Rota Load",
+      "id": "b99714f8-f635-4b27-84e2-bf0a0640cf1f",
+      "name": "Rota Load",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

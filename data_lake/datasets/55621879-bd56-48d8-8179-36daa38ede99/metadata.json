@@ -1,0 +1,217 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "coverage": "All Regions",
+  "createddate": "",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "5ee709d4-9def-4652-9087-26e325ed6385",
+  "dataclassification": "Shared",
+  "expirationdate": "",
+  "id": "55621879-bd56-48d8-8179-36daa38ede99",
+  "identifier": "ECR",
+  "isopen": false,
+  "language": "EN",
+  "license_id": "",
+  "license_title": "",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2020-12-03T20:42:19.731647",
+  "metadata_modified": "2026-04-23T14:00:05.890291",
+  "name": "embedded-capacity-register",
+  "notes": "From July 2020, the System Wide Resource Register has been renamed as the Embedded Capacity Register (ECR) in line with the DCUSA change DCP 350. The ECR provides information to electricity network stakeholders on generation and storage resources (\u226550kW) that are connected, or accepted to connect, to National Grid\u2019s distribution network and is updated on a monthly basis.\r\n\r\nThis resource register is National Grid Electricity Distribution\u2019s contribution to the Embedded Capacity Register (ECR) which has been developed through an ENA Open Network project. The information contained here will be updated monthly. Whilst we use reasonable endeavors to ensure that the data contained within resource register is accurate, we do not accept any responsibility or liability for, the accuracy or the completeness of the content or any loss which may arise from reliance on the resource register and related information.",
+  "num_resources": 3,
+  "num_tags": 9,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://connecteddata.nationalgrid.co.uk/base/images/logo.svg",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "National Grid Electricity Distribution",
+  "relation": "",
+  "rights": "WPD Shared Data Licence",
+  "state": "active",
+  "title": "Embedded Capacity Register",
+  "type": "dataset",
+  "updatefrequency": "1 Month",
+  "url": "National Grid Electricity Distribution",
+  "version": null,
+  "extras": [
+    {
+      "key": "Sensitivity Classification ",
+      "value": "TBC"
+    }
+  ],
+  "groups": [
+    {
+      "description": "This group includes data relating to connections to the distribution network, such as the Embedded Capacity Register, low carbon technology, new connections and smart metering data.",
+      "display_name": "Connections",
+      "id": "bb762ed1-edfc-4116-99d1-a595a80fd773",
+      "image_display_url": "",
+      "name": "connection",
+      "title": "Connections"
+    }
+  ],
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-05T18:43:38.888984",
+      "datastore_active": false,
+      "description": "",
+      "format": "PDF",
+      "hash": "",
+      "id": "8864d871-3fd7-40d4-88ef-a8a696f8ee33",
+      "last_modified": "2024-06-05T18:43:38.842662",
+      "metadata_modified": "2024-06-08T04:02:56.128057",
+      "mimetype": "application/pdf",
+      "mimetype_inner": null,
+      "name": "Data Sharing Assessment",
+      "package_id": "55621879-bd56-48d8-8179-36daa38ede99",
+      "position": 0,
+      "resource_type": null,
+      "restricted_level": "public",
+      "size": 39901,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/55621879-bd56-48d8-8179-36daa38ede99/resource/8864d871-3fd7-40d4-88ef-a8a696f8ee33/download/dsa020-embedded-capacity-register.pdf",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-14T11:24:56.490474",
+      "datastore_active": false,
+      "description": "",
+      "format": "",
+      "hash": "",
+      "id": "682d41fe-7f36-464e-97d2-d8c3732c8de4",
+      "last_modified": null,
+      "metadata_modified": "2024-06-14T11:24:56.463766",
+      "mimetype": null,
+      "mimetype_inner": null,
+      "name": "ECR Dashboard",
+      "package_id": "55621879-bd56-48d8-8179-36daa38ede99",
+      "position": 1,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": null,
+      "state": "active",
+      "url": "https://www.nationalgrid.co.uk/our-network/embedded-capacity-register",
+      "url_type": null,
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2025-12-17T12:24:37.263641",
+      "datastore_active": false,
+      "description": "",
+      "format": "CSV",
+      "hash": "",
+      "id": "82a4ae83-77a3-4e7b-9060-8072ed96de9d",
+      "last_modified": "2026-04-09T13:22:56.909476",
+      "metadata_modified": "2026-04-09T13:22:56.938636",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "ECR APR 2026",
+      "package_id": "55621879-bd56-48d8-8179-36daa38ede99",
+      "position": 2,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": 5795829,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/55621879-bd56-48d8-8179-36daa38ede99/resource/82a4ae83-77a3-4e7b-9060-8072ed96de9d/download/nged_ecr_apr_2026.csv",
+      "url_type": "upload",
+      "wpd_datastore_last_updated": "EXTRA-2026-04-23T14:00:05.890291",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "CHP",
+      "id": "e692558a-c8a0-4582-8532-a5e026a6ca18",
+      "name": "CHP",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Capacity",
+      "id": "ff7f1dde-3388-46da-a744-f40136bdf49b",
+      "name": "Capacity",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "ECR",
+      "id": "29595f88-21be-4c22-b981-08c7b306fea3",
+      "name": "ECR",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Export",
+      "id": "fb54c7ab-273a-4c64-af0a-ae59eb0fc13c",
+      "name": "Export",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Generation",
+      "id": "cf9c57c8-7779-4c2d-b0c1-dfc5def15e76",
+      "name": "Generation",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "MPAN",
+      "id": "4cabcd39-d862-4b75-b5e6-d37a535d1f8c",
+      "name": "MPAN",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "PV",
+      "id": "33f1eadc-96bd-452b-8846-d6afdd15a2f6",
+      "name": "PV",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Solar",
+      "id": "9283c445-3e09-4b21-a4d0-5ee8573c3187",
+      "name": "Solar",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Wind",
+      "id": "343cab68-3ce9-45f0-b5ea-3fde03f10d6b",
+      "name": "Wind",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

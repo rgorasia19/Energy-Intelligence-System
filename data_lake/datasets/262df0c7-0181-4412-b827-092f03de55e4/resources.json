@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:48:41.705730",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "2945dc29-1d88-4c77-a720-b592079ee4b7",
+    "last_modified": "2024-06-24T21:17:31.032025",
+    "metadata_modified": "2024-06-24T21:17:31.048860",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "262df0c7-0181-4412-b827-092f03de55e4",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71815,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/262df0c7-0181-4412-b827-092f03de55e4/resource/2945dc29-1d88-4c77-a720-b592079ee4b7/download/dsa065-132kv-towers.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

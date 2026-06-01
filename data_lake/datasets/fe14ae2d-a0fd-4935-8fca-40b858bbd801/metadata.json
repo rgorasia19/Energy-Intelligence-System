@@ -1,0 +1,155 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "createddate": "",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "d320b0c5-10ed-4c08-912e-2dca4c4d207b",
+  "dataclassification": "Shared",
+  "expirationdate": "",
+  "id": "fe14ae2d-a0fd-4935-8fca-40b858bbd801",
+  "identifier": "",
+  "isopen": false,
+  "language": "EN",
+  "license_id": "",
+  "license_title": "",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2021-10-01T10:23:45.953092",
+  "metadata_modified": "2026-05-01T08:00:50.220017",
+  "name": "lct-connections",
+  "notes": "This dataset contains the number of low carbon technology connections to the National Grid Electricity Distribution network aggregated by primary substation, low carbon technology type and month for the period from April 2017",
+  "num_resources": 2,
+  "num_tags": 5,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://connecteddata.nationalgrid.co.uk/base/images/logo.svg",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "",
+  "relation": "",
+  "rights": "WPD Shared Data Licence",
+  "state": "active",
+  "title": "LCT Connections",
+  "type": "dataset",
+  "updatefrequency": "1 Month",
+  "url": "",
+  "version": null,
+  "groups": [
+    {
+      "description": "This group includes data relating to connections to the distribution network, such as the Embedded Capacity Register, low carbon technology, new connections and smart metering data.",
+      "display_name": "Connections",
+      "id": "bb762ed1-edfc-4116-99d1-a595a80fd773",
+      "image_display_url": "",
+      "name": "connection",
+      "title": "Connections"
+    }
+  ],
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-01T07:29:48.794744",
+      "datastore_active": true,
+      "description": null,
+      "format": "CSV",
+      "hash": "",
+      "id": "ee52490e-1753-4cc2-a5a8-453f588fde00",
+      "last_modified": "2026-05-01T08:00:50.201547",
+      "metadata_modified": "2026-05-01T08:00:50.227509",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "LCT Connections",
+      "outboundFile": "<starlette.datastructures.UploadFile object at 0x7fadca3b0070>",
+      "package_id": "fe14ae2d-a0fd-4935-8fca-40b858bbd801",
+      "position": 0,
+      "resource_type": null,
+      "restricted_level": "registered",
+      "size": 5297252,
+      "state": "active",
+      "url": "redacted",
+      "url_type": "upload",
+      "wpd_datastore_last_updated": "EXTRA-2025-02-01T09:07:57.506868",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      },
+      "restricted": "redacted"
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-05T18:46:13.919981",
+      "datastore_active": false,
+      "description": "",
+      "format": "PDF",
+      "hash": "",
+      "id": "1a6f6525-9c21-42e5-95b9-bc3b751c94c5",
+      "last_modified": "2024-06-05T18:46:13.881429",
+      "metadata_modified": "2024-06-08T04:08:42.670337",
+      "mimetype": "application/pdf",
+      "mimetype_inner": null,
+      "name": "Data Sharing Assessment",
+      "package_id": "fe14ae2d-a0fd-4935-8fca-40b858bbd801",
+      "position": 1,
+      "resource_type": null,
+      "restricted_level": "public",
+      "size": 39578,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/fe14ae2d-a0fd-4935-8fca-40b858bbd801/resource/1a6f6525-9c21-42e5-95b9-bc3b751c94c5/download/dsa023-lct-connections.pdf",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "ev",
+      "id": "dc84af71-40a0-494c-8a3c-1a012dd106ac",
+      "name": "ev",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "hp",
+      "id": "841afce2-5ca3-4ae0-a702-dc9b7cb646d3",
+      "name": "hp",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "lct",
+      "id": "ad9d3755-ea6c-47a0-b969-5592a061856c",
+      "name": "lct",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "pv",
+      "id": "26c80423-7a0b-4178-9c3a-c85868732454",
+      "name": "pv",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "storage",
+      "id": "f6c912cc-f46d-40a9-8a9c-cab880222b50",
+      "name": "storage",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

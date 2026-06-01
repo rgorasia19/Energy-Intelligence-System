@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T18:59:21.000888",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "6b3a3bc8-d1dc-48f1-b733-205e9a818956",
+    "last_modified": "2024-06-24T21:05:31.139967",
+    "metadata_modified": "2024-06-24T21:05:31.160367",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "a9557598-750f-47cb-8065-60f9681d1190",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 72153,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/a9557598-750f-47cb-8065-60f9681d1190/resource/6b3a3bc8-d1dc-48f1-b733-205e9a818956/download/dsa074-66kv-underground-cables.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

@@ -1,0 +1,133 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "createddate": "2026-05-15",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "f65ba282-0f87-4269-aa6d-a82dd4a7e47c",
+  "dataclassification": "Open",
+  "expirationdate": "",
+  "ib1_dataset_assurance": "",
+  "ib1_scheme": "",
+  "ib1_sensitivity_class": "IB1-O",
+  "ib1_trust_framework": "",
+  "id": "d3b8e60d-5592-41c0-a98a-e43a37e5920c",
+  "identifier": "",
+  "isopen": true,
+  "language": "EN",
+  "license_id": "wpd-open-data",
+  "license_title": "WPD Open Data Licence",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2026-05-15T15:45:14.437951",
+  "metadata_modified": "2026-05-15T16:12:04.991531",
+  "name": "demand-data",
+  "notes": "This dataset includes all demand projects recorded in our systems above 1MW \u2014covering both projects in the connections queue and those already connected to the NGED network.\r\n\r\nDisclaimer: This demand dataset is being published to support customers and may contain incomplete or unvalidated fields. It has not yet undergone our full data governance and assurance processes, so users should treat the information as indicative and apply appropriate checks before relying on it for decision-making. We are actively cleansing and improving the remaining data fields requested by customers, and we intend to publish an enhanced version with additional fields in the near future.\r\n\r\nContact: If you have any questions or want to provide feedback on this dataset please contact: sarah.kenny-levick@nationalgrid.com",
+  "num_resources": 2,
+  "num_tags": 1,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://connecteddata.nationalgrid.co.uk/base/images/logo.svg",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "",
+  "relation": "",
+  "rights": "WPD Open Data Licence",
+  "state": "active",
+  "theme": [
+    ""
+  ],
+  "title": "Demand Data",
+  "type": "dataset",
+  "updatefrequency": "Not Applicable",
+  "url": "",
+  "version": "",
+  "groups": [
+    {
+      "description": "This data group includes historic data and real time electricity demand",
+      "display_name": "Demand",
+      "id": "792bca32-651c-4f47-a394-7072a81cfc62",
+      "image_display_url": "",
+      "name": "demand",
+      "title": "Demand"
+    }
+  ],
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2026-05-15T15:46:52.999052",
+      "datastore_active": false,
+      "description": "",
+      "format": "CSV",
+      "hash": "",
+      "id": "90eec37f-d59e-4bc6-8fd2-497ecb44e615",
+      "last_modified": "2026-05-15T15:46:52.954585",
+      "metadata_modified": "2026-05-15T15:46:52.985419",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "Demand Data",
+      "package_id": "d3b8e60d-5592-41c0-a98a-e43a37e5920c",
+      "position": 0,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": 260008,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/d3b8e60d-5592-41c0-a98a-e43a37e5920c/resource/90eec37f-d59e-4bc6-8fd2-497ecb44e615/download/20260511_demand_data_upload.csv",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2026-05-15T16:12:05.012184",
+      "datastore_active": false,
+      "description": "",
+      "format": "PDF",
+      "hash": "",
+      "id": "a9d29040-db4e-4fcd-8f8e-45afdcd2d8cf",
+      "last_modified": "2026-05-15T16:12:04.954840",
+      "metadata_modified": "2026-05-15T16:12:05.001736",
+      "mimetype": "application/pdf",
+      "mimetype_inner": null,
+      "name": "DSA098 - Demand.pdf",
+      "package_id": "d3b8e60d-5592-41c0-a98a-e43a37e5920c",
+      "position": 1,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": 361193,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/d3b8e60d-5592-41c0-a98a-e43a37e5920c/resource/a9d29040-db4e-4fcd-8f8e-45afdcd2d8cf/download/dsa098-demand.pdf",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "Demand",
+      "id": "3d75a4b3-83ea-4233-83b8-8c7d8b85a780",
+      "name": "Demand",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

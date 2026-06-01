@@ -1,0 +1,111 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "createddate": "2026-01-29",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "131eadab-d384-4a04-8593-eb4ecdb9776d",
+  "dataclassification": "Open",
+  "expirationdate": "2026-11-26",
+  "ib1_dataset_assurance": "",
+  "ib1_scheme": "",
+  "ib1_sensitivity_class": "IB1-O",
+  "ib1_trust_framework": "",
+  "id": "d0de8b47-bd55-47b3-83d4-f9c98303f9e1",
+  "identifier": "CBM",
+  "isopen": true,
+  "language": "EN",
+  "license_id": "wpd-open-data",
+  "license_title": "WPD Open Data Licence",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2026-04-08T10:05:46.683903",
+  "metadata_modified": "2026-04-09T19:14:31.981900",
+  "name": "curtailment_buses",
+  "notes": "This dataset provides a complete index of all electrical buses (or nodes) used within [curtailment datasets](https://connecteddata.nationalgrid.co.uk/dataset/?tags=CURTAILMENT).\r\n\r\nPlease see the guidance document for further information: [Curtailment Dataset Guidance](https://dso.nationalgrid.co.uk/curtailment-analysis-data-usage-guidance).",
+  "num_resources": 1,
+  "num_tags": 3,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://connecteddata.nationalgrid.co.uk/base/images/logo.svg",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "DSO",
+  "relation": "PELTD CBM",
+  "rights": "WPD Open Data Licence",
+  "state": "active",
+  "theme": [
+    ""
+  ],
+  "title": "Curtailment Bus Index",
+  "type": "dataset",
+  "updatefrequency": "12 Months",
+  "url": "",
+  "version": "",
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2026-04-08T10:08:09.017432",
+      "datastore_active": true,
+      "description": "",
+      "format": "CSV",
+      "hash": "",
+      "id": "6ba4ccd6-a9f8-405e-a3cf-45c79de9f16e",
+      "last_modified": "2026-04-08T10:08:08.988403",
+      "metadata_modified": "2026-04-08T10:13:22.780937",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "Bus Mapping",
+      "package_id": "d0de8b47-bd55-47b3-83d4-f9c98303f9e1",
+      "position": 0,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "public",
+      "size": 1093894,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/d0de8b47-bd55-47b3-83d4-f9c98303f9e1/resource/6ba4ccd6-a9f8-405e-a3cf-45c79de9f16e/download/bus_mapping.csv",
+      "url_type": "upload",
+      "wpd_datastore_last_updated": "EXTRA-2026-04-08T10:16:39.665734",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "CURTAILMENT",
+      "id": "3f575dc1-2a33-44ac-b1a9-95ce05170434",
+      "name": "CURTAILMENT",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "DSO",
+      "id": "16354c76-e01e-4a1c-836a-901172e2a180",
+      "name": "DSO",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "NODES",
+      "id": "7caee4fb-94a8-4fb5-99ed-9e6a8654fa04",
+      "name": "NODES",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "groups": [],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

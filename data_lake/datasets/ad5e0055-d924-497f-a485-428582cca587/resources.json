@@ -1,0 +1,59 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2023-09-27T08:38:34.039949",
+    "datastore_active": true,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "e06413f8-0d86-4a13-b5c5-db14829940ed",
+    "last_modified": "2025-08-19T09:15:57.487915",
+    "metadata_modified": "2025-08-19T09:15:57.525001",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Primary Substation Location (Easting / Northings)",
+    "package_id": "ad5e0055-d924-497f-a485-428582cca587",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "registered",
+    "size": 178200,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2025-08-19T09:48:55.876719",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:17:17.393711",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "66a01d51-badf-44e9-87b5-12cc94907ac5",
+    "last_modified": "2024-06-05T19:17:17.358642",
+    "metadata_modified": "2024-06-08T13:50:40.674310",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "ad5e0055-d924-497f-a485-428582cca587",
+    "position": 1,
+    "resource_type": null,
+    "restricted_level": "public",
+    "size": 39396,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/ad5e0055-d924-497f-a485-428582cca587/resource/66a01d51-badf-44e9-87b5-12cc94907ac5/download/dsa038-primary-substation-location-easting-northings.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

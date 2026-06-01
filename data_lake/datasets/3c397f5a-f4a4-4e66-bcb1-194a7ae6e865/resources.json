@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:44:51.640320",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "ce058428-6668-4c41-9f21-3df473b3d7cf",
+    "last_modified": "2024-06-24T21:11:58.205608",
+    "metadata_modified": "2024-06-24T21:11:58.223265",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "3c397f5a-f4a4-4e66-bcb1-194a7ae6e865",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71811,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/3c397f5a-f4a4-4e66-bcb1-194a7ae6e865/resource/ce058428-6668-4c41-9f21-3df473b3d7cf/download/dsa073-66kv-towers.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

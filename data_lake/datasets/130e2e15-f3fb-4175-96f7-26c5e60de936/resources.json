@@ -1,0 +1,58 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2023-10-30T09:17:29.061726",
+    "datastore_active": true,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "687e09da-e01c-4ba8-95da-529d0d6c9ef4",
+    "last_modified": "2025-03-03T15:46:13.392062",
+    "metadata_modified": "2025-03-03T15:46:13.443629",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "GSP Technical Limits",
+    "package_id": "130e2e15-f3fb-4175-96f7-26c5e60de936",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "registered",
+    "size": 4086,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:52:58.689985",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "414c1e17-0105-4a92-8ac6-ef2d6306b911",
+    "last_modified": "2024-06-05T19:52:58.661028",
+    "metadata_modified": "2024-06-08T04:05:06.057677",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "130e2e15-f3fb-4175-96f7-26c5e60de936",
+    "position": 1,
+    "resource_type": null,
+    "restricted_level": "public",
+    "size": 39165,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/130e2e15-f3fb-4175-96f7-26c5e60de936/resource/414c1e17-0105-4a92-8ac6-ef2d6306b911/download/dsa089-gsp-technical-limits.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

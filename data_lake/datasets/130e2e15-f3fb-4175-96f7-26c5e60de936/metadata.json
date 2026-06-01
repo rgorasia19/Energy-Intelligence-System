@@ -1,0 +1,140 @@
+{
+  "author": null,
+  "author_email": null,
+  "contributor": "Digitalisation & Data",
+  "coverage": "All Regions",
+  "createddate": "2023-10-30",
+  "creator": "Western Power Distribution",
+  "creator_user_id": "55a03f0f-3289-4405-b565-1565b71414f3",
+  "dataclassification": "Shared",
+  "expirationdate": "",
+  "id": "130e2e15-f3fb-4175-96f7-26c5e60de936",
+  "identifier": "ngedgtl",
+  "isopen": false,
+  "language": "EN",
+  "license_id": "",
+  "license_title": "",
+  "maintainer": null,
+  "maintainer_email": null,
+  "metadata_created": "2023-10-30T09:17:07.357599",
+  "metadata_modified": "2025-08-14T13:50:01.683899",
+  "name": "gsp-technical-limits",
+  "notes": "The GSP Technical Limits dataset provides a view of the current technical power limits for the National Grid Electricity Distribution GSPs. This is aligned with Appendix G, so when these datasets are combined, it should provide a comprehensive view of capacity headroom at all our license area Grid Supply Points. \r\n\r\nBoth export and import limits are provided where available. A single export limit is provided, taken from the period of most onerous export conditions in the year. Three import limits are provided to cover different periods of the year: Winter, Access Period and Summer.\r\n\r\nNote: These technical limits are under development, and are pending review and agreement. Therefore, these values may change over time.",
+  "num_resources": 2,
+  "num_tags": 2,
+  "organization": {
+    "id": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+    "name": "national_grid_electricity_distribution",
+    "title": "National Grid Electricity Distribution",
+    "type": "organization",
+    "description": "## National Grid Electricity Distribution is the regional electricity distribution division of National Grid.\r\n\r\nFormerly known as Western Power Distribution, the UK\u2019s largest electricity distribution network serves nearly 8 million customers in the East and West Midlands, South West and Wales, delivering essential power to millions of homes and businesses across its regions.\r\n\r\nWith a distribution area of 550,000 square kilometres, it\u2019s 6,500 colleagues are committed to providing a safe, stable and reliable electricity supply and ensuring the highest quality of customer service.",
+    "image_url": "https://www.nationalgrid.com/sites/default/files/styles/hero_large/public/images/NGED_TV_Ad-RK-220822-050.jpg?h=4dbeb98d&itok=jOhr84vM",
+    "created": "2020-12-03T20:28:20.647977",
+    "is_organization": true,
+    "approval_status": "approved",
+    "state": "active"
+  },
+  "owner_org": "a65a370a-a123-4d90-bdb9-fb176c382e83",
+  "private": false,
+  "publisher": "National Grid Electricity Distribution",
+  "relation": "-",
+  "rights": "WPD Shared Data Licence",
+  "state": "active",
+  "title": "GSP Technical Limits",
+  "type": "dataset",
+  "updatefrequency": "Not Applicable",
+  "url": "",
+  "version": null,
+  "extras": [
+    {
+      "key": "Sensitivity Classification ",
+      "value": "TBC"
+    }
+  ],
+  "groups": [
+    {
+      "description": "Information and data related to network assets and system operation; for example the various Long Term Development Statement tables.",
+      "display_name": "System and Network",
+      "id": "6383a365-e64c-4565-a77a-b39c8a3d4618",
+      "image_display_url": "",
+      "name": "system-and-network",
+      "title": "System and Network"
+    }
+  ],
+  "resources": [
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2023-10-30T09:17:29.061726",
+      "datastore_active": true,
+      "description": "",
+      "format": "CSV",
+      "hash": "",
+      "id": "687e09da-e01c-4ba8-95da-529d0d6c9ef4",
+      "last_modified": "2025-03-03T15:46:13.392062",
+      "metadata_modified": "2025-03-03T15:46:13.443629",
+      "mimetype": "text/csv",
+      "mimetype_inner": null,
+      "name": "GSP Technical Limits",
+      "package_id": "130e2e15-f3fb-4175-96f7-26c5e60de936",
+      "position": 0,
+      "resource_type": null,
+      "restricted_allowed_users": "",
+      "restricted_level": "registered",
+      "size": 4086,
+      "state": "active",
+      "url": "redacted",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      },
+      "restricted": "redacted"
+    },
+    {
+      "cache_last_updated": null,
+      "cache_url": null,
+      "created": "2024-06-05T19:52:58.689985",
+      "datastore_active": false,
+      "description": "",
+      "format": "PDF",
+      "hash": "",
+      "id": "414c1e17-0105-4a92-8ac6-ef2d6306b911",
+      "last_modified": "2024-06-05T19:52:58.661028",
+      "metadata_modified": "2024-06-08T04:05:06.057677",
+      "mimetype": "application/pdf",
+      "mimetype_inner": null,
+      "name": "Data Sharing Assessment",
+      "package_id": "130e2e15-f3fb-4175-96f7-26c5e60de936",
+      "position": 1,
+      "resource_type": null,
+      "restricted_level": "public",
+      "size": 39165,
+      "state": "active",
+      "url": "https://connecteddata.nationalgrid.co.uk/dataset/130e2e15-f3fb-4175-96f7-26c5e60de936/resource/414c1e17-0105-4a92-8ac6-ef2d6306b911/download/dsa089-gsp-technical-limits.pdf",
+      "url_type": "upload",
+      "tracking_summary": {
+        "total": 0,
+        "recent": 0
+      }
+    }
+  ],
+  "tags": [
+    {
+      "display_name": "GSP",
+      "id": "bc05fcdd-3a08-43ad-bd69-38b45678d2b4",
+      "name": "GSP",
+      "state": "active",
+      "vocabulary_id": null
+    },
+    {
+      "display_name": "Technical Limits",
+      "id": "33104a98-ef57-4cad-aa75-3b71a1be3211",
+      "name": "Technical Limits",
+      "state": "active",
+      "vocabulary_id": null
+    }
+  ],
+  "relationships_as_subject": [],
+  "relationships_as_object": []
+}

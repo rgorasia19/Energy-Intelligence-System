@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:43:19.697632",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "d2864a79-3b3e-41ba-ba61-f9950cdcfcad",
+    "last_modified": "2024-06-24T21:14:58.713827",
+    "metadata_modified": "2024-06-24T21:14:58.730787",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "58938049-d1e0-43fd-9be0-53777292842d",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71827,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/58938049-d1e0-43fd-9be0-53777292842d/resource/d2864a79-3b3e-41ba-ba61-f9950cdcfcad/download/dsa076-33kv-transformers.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2026-05-15T15:46:52.999052",
+    "datastore_active": false,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "90eec37f-d59e-4bc6-8fd2-497ecb44e615",
+    "last_modified": "2026-05-15T15:46:52.954585",
+    "metadata_modified": "2026-05-15T15:46:52.985419",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Demand Data",
+    "package_id": "d3b8e60d-5592-41c0-a98a-e43a37e5920c",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 260008,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/d3b8e60d-5592-41c0-a98a-e43a37e5920c/resource/90eec37f-d59e-4bc6-8fd2-497ecb44e615/download/20260511_demand_data_upload.csv",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2026-05-15T16:12:05.012184",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "a9d29040-db4e-4fcd-8f8e-45afdcd2d8cf",
+    "last_modified": "2026-05-15T16:12:04.954840",
+    "metadata_modified": "2026-05-15T16:12:05.001736",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "DSA098 - Demand.pdf",
+    "package_id": "d3b8e60d-5592-41c0-a98a-e43a37e5920c",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 361193,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/d3b8e60d-5592-41c0-a98a-e43a37e5920c/resource/a9d29040-db4e-4fcd-8f8e-45afdcd2d8cf/download/dsa098-demand.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

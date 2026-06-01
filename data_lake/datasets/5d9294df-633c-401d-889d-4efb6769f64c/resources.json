@@ -1,0 +1,57 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2023-09-27T08:37:16.584075",
+    "datastore_active": true,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "da738e76-b51a-42bc-9978-685e152977a2",
+    "last_modified": "2024-05-17T12:54:39.170697",
+    "metadata_modified": "2024-06-08T03:20:48.467468",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Distribution Substation Location (Easting / Northings)",
+    "package_id": "5d9294df-633c-401d-889d-4efb6769f64c",
+    "position": 0,
+    "resource_type": null,
+    "restricted_level": "registered",
+    "size": 18275134,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:18:04.268730",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "56ad9205-2fc4-4ccf-8d12-caf66430bc13",
+    "last_modified": "2024-06-05T19:18:04.240440",
+    "metadata_modified": "2024-06-08T03:20:49.055979",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "5d9294df-633c-401d-889d-4efb6769f64c",
+    "position": 1,
+    "resource_type": null,
+    "restricted_level": "public",
+    "size": 39335,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/5d9294df-633c-401d-889d-4efb6769f64c/resource/56ad9205-2fc4-4ccf-8d12-caf66430bc13/download/dsa018-distribution-substation-location-easting-northings.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

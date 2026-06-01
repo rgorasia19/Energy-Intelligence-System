@@ -1,0 +1,30 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:48:09.404479",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "21026f5f-1d31-4e2b-a4bf-cda9cf234631",
+    "last_modified": "2024-06-24T21:19:13.487417",
+    "metadata_modified": "2024-06-24T21:19:13.505178",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "aa71d9c4-2444-4fe4-a378-5818d7de309a",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71816,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/aa71d9c4-2444-4fe4-a378-5818d7de309a/resource/21026f5f-1d31-4e2b-a4bf-cda9cf234631/download/dsa064-132kv-poles.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-10-17T09:19:30.534451",
+    "datastore_active": true,
+    "description": "",
+    "format": "CSV",
+    "hash": "",
+    "id": "dc025b52-6965-4a57-bac5-507254c0fa8b",
+    "last_modified": "2025-10-17T09:19:30.449986",
+    "metadata_modified": "2025-10-17T09:19:30.473527",
+    "mimetype": "text/csv",
+    "mimetype_inner": null,
+    "name": "Distribution Transformer Phasing.csv",
+    "package_id": "8b7f56f1-b1c8-4db4-adb7-647032b02bda",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "registered",
+    "size": 21180048,
+    "state": "active",
+    "url": "redacted",
+    "url_type": "upload",
+    "wpd_datastore_last_updated": "EXTRA-2025-10-17T09:35:02.245770",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    },
+    "restricted": "redacted"
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-10-17T09:24:40.011992",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "a0039f76-5725-47f9-b6d8-c78f673bc44e",
+    "last_modified": "2025-10-17T09:24:39.953440",
+    "metadata_modified": "2025-10-17T09:24:39.974544",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "8b7f56f1-b1c8-4db4-adb7-647032b02bda",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 40205,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/8b7f56f1-b1c8-4db4-adb7-647032b02bda/resource/a0039f76-5725-47f9-b6d8-c78f673bc44e/download/data-sharing-assessment.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]

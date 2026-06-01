@@ -1,0 +1,58 @@
+[
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2024-06-05T19:41:28.379733",
+    "datastore_active": false,
+    "description": "",
+    "format": "PDF",
+    "hash": "",
+    "id": "2f5dcc24-14d7-4f4b-a355-773c3d24b675",
+    "last_modified": "2024-06-24T21:07:27.091562",
+    "metadata_modified": "2024-06-24T21:07:27.109323",
+    "mimetype": "application/pdf",
+    "mimetype_inner": null,
+    "name": "Data Sharing Assessment",
+    "package_id": "42b961de-8267-4a73-b299-ea4d0bfb480a",
+    "position": 0,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": 71821,
+    "state": "active",
+    "url": "https://connecteddata.nationalgrid.co.uk/dataset/42b961de-8267-4a73-b299-ea4d0bfb480a/resource/2f5dcc24-14d7-4f4b-a355-773c3d24b675/download/dsa059-11kv-overhead-lines.pdf",
+    "url_type": "upload",
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  },
+  {
+    "cache_last_updated": null,
+    "cache_url": null,
+    "created": "2025-03-31T08:33:17.511414",
+    "datastore_active": false,
+    "description": "",
+    "format": "",
+    "hash": "",
+    "id": "3b838a9f-ea63-43d3-a47c-8cacc18714ba",
+    "last_modified": null,
+    "metadata_modified": "2026-02-13T10:29:43.096518",
+    "mimetype": null,
+    "mimetype_inner": null,
+    "name": "dataportal2.nationalgrid.co.uk",
+    "package_id": "42b961de-8267-4a73-b299-ea4d0bfb480a",
+    "position": 1,
+    "resource_type": null,
+    "restricted_allowed_users": "",
+    "restricted_level": "public",
+    "size": null,
+    "state": "active",
+    "url": "https://dataportal2.nationalgrid.co.uk/",
+    "url_type": null,
+    "tracking_summary": {
+      "total": 0,
+      "recent": 0
+    }
+  }
+]
