@@ -13,23 +13,35 @@ def get(endpoint, params=None, headers=None):
     return response.json()
 
 
-datapoint_labels = ["demand-data","generation-capacity-register","flexibility-forecasts","live-data"]
+search_query = "demand OR generation OR capacity"
+print(f"Searching for datasets matching: {search_query}")
+
+# Use package_search to find datasets matching the query
+response = get("package_search", params={"q": search_query, "rows": 100})
+datasets = response["result"]["results"]
+
 url_ids = pd.DataFrame()
 
-for d in datapoint_labels:
-    print(f"Checking endpoint: {d}")
-    dataset = get("package_show",params={"id":d, })
-    resources = dataset["result"]["resources"]
+for dataset in datasets:
+    dataset_name = dataset.get("name", "unknown")
+    print(f"Checking dataset: {dataset_name}")
     
-    for r in dataset["result"]["resources"]:
-        if r["datastore_active"] and r["format"] == "CSV":
-            df = pd.DataFrame({"label": d, "id": r["id"]})
-            url_ids = pd.concat([url_ids, df])            
-        print(
-            r["id"],
-            r["format"],
-            r["datastore_active"],
-            r["url"]
-        )
+    resources = dataset.get("resources", [])
+    
+    for r in resources:
+        if r.get("datastore_active") and r.get("format", "").upper() == "CSV" and r.get("url")!="redacted" and dataset_name=="substation-loading":
+            org = dataset.get("groups") or {}
+            org_desc = org[0].get("description", "") if isinstance(org, list) else ""
+            url = r.get("url", "")
+            df = pd.DataFrame({"label": dataset_name, "id": [r["id"]], "details": [org_desc], "url": [url]})
+            url_ids = pd.concat([url_ids, df], ignore_index=True)            
+        # print(
+        #     r.get("id"),
+        #     r.get("format"),
+        #     r.get("datastore_active"),
+        #     r.get("url")
+        # )
     print("\n")
 print(url_ids)
+url_ids.to_csv("filtered_datasets.csv", index=False)
+print("Saved results to filtered_datasets.csv")
