@@ -6,6 +6,10 @@ By plotting the time series data for random days for different power stations, w
 2. We note that there are some substations, that have some noise in their demand curves, these are likely areas with a mix of residential and industrial load. 
 3. Some substations show negative load or drop midday during the summer, indicating the presence of local solar generation exporting back into the grid.
 
+## Correlation Analysis
+Global Network Patterns: Analysis of the heavy system-wide positive correlations ($0.65 \le r \le 0.98$) driven by shared macro-level variables like weather and consumer behavior cycles, and the resulting risks of coincident peaks. In some cases, due to negative generation from local solar installations, we see some instances of negative correlation between substations.  
+Margam is an outlier wrt to other stations, its correlation with other stations is very low. This could be due to Margam being situated in Port Talbot, an industrial hub, with different load characteristics than other stations. 
+
 ## PCA Analysis
 Key Results
 1. Dominant Global Mode (PC1)
@@ -89,3 +93,9 @@ Forecasting
 Model should include:
 PC1 (magnitude of demand)
 PC2 (system structure)
+
+## Autocorrelation
+- High-Frequency Diurnal Rhythm (The "Spiky" Band): The dense, jagged band represents strong daily (24-hour) seasonality. The sharp upward spikes at regular intervals show that grid demand at any given hour remains heavily correlated with the exact same hour on preceding days.
+- Macro Seasonal Waves: The underlying sinusoidal drift across the X-axis reveals the broader seasonal cycle of the grid.The initial decay transitions into a negative correlation trough (around lags 5,000–9,000), showing the inverse relationship between opposing seasons (e.g., winter peaks vs. summer or spring baseloads). The curve rises back into a secondary positive hump (around lags 12,000–15,000), capturing the structural return to the same season one full cycle later.
+- Sampling Interval Clue: Because a standard year contains 8,760 hours, the fact that the macro cycle peaks and resolves over a horizon extending up to 16,000+ points strongly points to half-hourly data resolution (where a full year comprises 17,520 settlement periods), which is highly typical for UK electrical grid reporting.
+- Modeling Impact: The notes outline why standard ARIMA will struggle here, confirming the need for frameworks that support multiple seasonalities (such as SARIMA or Prophet) or explicit lag-feature engineering ($t-48$ half-hours, $t-17,520$ half-hours) in machine learning architectures.
