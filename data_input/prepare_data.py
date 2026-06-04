@@ -21,6 +21,7 @@ def load_and_parse(path:Path):
         
     # Concatenate all series at once to avoid fragmentation
     master_df = pd.concat(df_list, axis=1)
+    master_df['Total'] = master_df.sum(axis=1)
     master_df.index = timestamps
     master_df.index.name = "Timestamp"
     
@@ -29,4 +30,4 @@ def load_and_parse(path:Path):
     print(master_df.head())
     return master_df
 
-load_and_parse(Path("data_lake"))
+load_and_parse(Path("C:\\Users\\ronak\\OneDrive\\Desktop\\Random\\Energy-Intelligence-System\\data_lake"))

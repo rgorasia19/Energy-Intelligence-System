@@ -76,14 +76,33 @@ def create_plots():
   plt.show()  
 
 # Defining thresholds
-print(pc_df["PC2"].describe())
+#print(pc_df["PC2"].describe())
 #plt.plot(pc_df["PC2"])
 #plt.show()
 
 pc2_z = (pc_df["PC2"] - pc_df["PC2"].mean()) / pc_df["PC2"].std()
 pc_df["PC2_z"] = pc2_z
 
-threshold = 1.0
-pc_df["regime"] = (pc_df["PC2_z"] >= threshold).astype(int)
-
+threshold = pc_df["PC2_z"].quantile(0.35)
+pc_df["regime"] = (pc_df["PC2_z"] < threshold).astype(int)
 print(pc_df["regime"].value_counts())
+
+def visualise_regimes():
+    plt.figure(figsize=(12,6))
+    plt.plot(pc_df.index, pc_df["PC2_z"], label="PC2_z")
+    plt.axhline(1, color='r', linestyle='--')
+    plt.axhline(-1, color='r', linestyle='--')
+    plt.legend()
+    plt.savefig("PC2_z.jpg", dpi=600)
+    plt.show()
+    
+    plt.figure(figsize=(12,4))
+    plt.plot(pc_df["regime"], label="regime")
+    plt.title("Regime (0=normal / 1=solar/export)")
+    plt.legend()
+    plt.savefig("regime.jpg", dpi=600)
+    plt.show()
+
+#visualise_regimes()
+
+pc_df.to_csv("pc_df.csv")
