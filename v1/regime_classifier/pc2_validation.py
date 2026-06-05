@@ -59,7 +59,7 @@ def seasonality_plots():
   plt.savefig("pc2_seasonality.jpg", dpi=600)
   plt.show()
 
-def correlations():
+def correlations(pc_df, master_df,label=None):
   indv_master_cols = [col for col in master_df.columns if col != "Total"]
   master_df["Mean_Indiv"] = master_df[indv_master_cols].mean(axis=1)
   master_df["Std_Indiv"] = master_df[indv_master_cols].std(axis=1)
@@ -71,22 +71,53 @@ def correlations():
   plt.figure(figsize=(12, 12))
   plt.subplot(2, 1, 1)
   plt.scatter(master_df["Mean_Indiv"], pc_df["PC2"],alpha=0.1)
-  plt.title("Correlation between Mean_Indiv and PC2")
+  if label:
+    plt.title(f"Correlation between Mean_Indiv and PC2 for {label} quantile")
+  else:
+    plt.title(f"Correlation between Mean_Indiv and PC2")
   plt.xlabel("Mean_Indiv")
   plt.ylabel("PC2")
 
   plt.subplot(2, 1, 2)
   plt.scatter(master_df["Std_Indiv"], pc_df["PC2"],alpha=0.1)
-  plt.title("Correlation between Std_Indiv and PC2")
+  if label:
+    plt.title(f"Correlation between Std_Indiv and PC2 for {label} quantile")
+  else:
+    plt.title(f"Correlation between Std_Indiv and PC2")
+  plt.xlabel("Std_Indiv")
   plt.xlabel("Std_Indiv")
   plt.ylabel("PC2")
   plt.tight_layout()
-  plt.savefig("mean+std_indiv_corr.jpg", dpi=600)
+  if label:
+    plt.savefig(f"mean+std_indiv_corr_{label}.jpg", dpi=600)
+  else:
+    plt.savefig("mean+std_indiv_corr.jpg", dpi=600)
   plt.show()
 
   print("Correlation between Mean_Indiv and PC2:", mean_indiv_corr)
   print("Correlation between Std_Indiv and PC2:", std_indiv_corr)
 
+def pc2_binning_and_correlations(pc_df, master_df):
+  indv_master_cols = [col for col in master_df.columns if col != "Total"]
+  lower_pc2_quantile = pc_df["PC2"].quantile(0.25)
+  middle_pc2_quantile = pc_df["PC2"].quantile(0.5)
+  upper_pc2_quantile = pc_df["PC2"].quantile(0.75)
+
+  lower_pc2_index = pc_df[pc_df["PC2"] < lower_pc2_quantile].index
+  middle_pc2_index = pc_df[(pc_df["PC2"] >= lower_pc2_quantile) & (pc_df["PC2"] < middle_pc2_quantile)].index
+  upper_pc2_index = pc_df[pc_df["PC2"] >= middle_pc2_quantile].index
+
+  lower_master_df = master_df.loc[lower_pc2_index]
+  middle_master_df = master_df.loc[middle_pc2_index]
+  upper_master_df = master_df.loc[upper_pc2_index]
+
+  print("\n----LOWER QUANTILE RESULTS----")
+  correlations(pc_df.loc[lower_pc2_index], lower_master_df, "lower")
+  print("\n----MIDDLE QUANTILE RESULTS----")
+  correlations(pc_df.loc[middle_pc2_index], middle_master_df, "middle")
+  print("\n----UPPER QUANTILE RESULTS----")
+  correlations(pc_df.loc[upper_pc2_index], upper_master_df, "upper")  
+
 if __name__ == "__main__":
-  correlations()
+  correlations(pc_df, master_df)
     

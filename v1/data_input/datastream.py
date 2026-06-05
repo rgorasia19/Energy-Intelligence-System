@@ -56,7 +56,7 @@ class DataStream():
         all_data = []
 
         while True:
-            res = api("package_search", {"rows": limit, "start": start})
+            res = self.api("package_search", {"rows": limit, "start": start})
 
             if not res or not res.get("success"):
                 print(f"[WARN] failed batch start={start}")
