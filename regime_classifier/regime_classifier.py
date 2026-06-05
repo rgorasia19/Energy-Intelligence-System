@@ -122,10 +122,5 @@ def main():
     plt.savefig("PR_curve.jpg", dpi=600)
     plt.show()
 
-
-
-
-
-
 if __name__ == "__main__":
     main()
