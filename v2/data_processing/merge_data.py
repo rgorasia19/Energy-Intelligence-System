@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 
-file_path = "../datalake/"
+file_path = "../../datalake/raw_data/"
 files = [f for f in os.listdir(file_path) if f.startswith("demanddata_") and f.endswith(".csv")]
 
 all_data = []

@@ -77,7 +77,7 @@ feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','INTERCONNECTOR_VS_DEMAND','ST
 #9. CREATE A .TXT FILE CONTAINING FEATURES AND WRITE A SEPARATE DATAFRAME
 
 feature_df = pd.DataFrame()
-with open('../../datalake/features.txt', 'w') as f:
+with open('../../datalake/clean+features/features.txt', 'w') as f:
   for feature in feature_list:
     f.write(feature + '\n')
     feature_df[feature] = df[feature]
@@ -85,4 +85,7 @@ with open('../../datalake/features.txt', 'w') as f:
 feature_df.dropna(inplace=True)
 feature_df.set_index('DATETIME', inplace=True)
 
-feature_df.to_csv('../../datalake/clean+features/feature_df.csv', index=True)
+float_cols = feature_df.select_dtypes(include=['float64']).columns
+feature_df[float_cols] = feature_df[float_cols].astype('float32')
+
+feature_df.to_parquet('../../datalake/clean+features/feature_df.parquet', index=True)

@@ -3,7 +3,7 @@ import numpy as np
 import os
 import datetime as dt
 
-file_path = "../datalake/"
+file_path = "../../datalake/raw_data/"
 files = [f for f in os.listdir(file_path) if f.endswith(".csv")]
 
 # Read the 2026 file to get target columns

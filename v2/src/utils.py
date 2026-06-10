@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
 
-df = pd.read_csv('../../datalake/clean+features/feature_df.csv')
-df['DATETIME'] = pd.to_datetime(df['DATETIME'])
-df.set_index('DATETIME', inplace=True)
+df = pd.read_parquet('../../datalake/clean+features/feature_df.parquet')
 
 train_split = int(len(df)*0.7)
 val_split = int(len(df)*0.85)
@@ -16,6 +14,6 @@ print(f"Training data shape: {train_df.shape}")
 print(f"Validation data shape: {val_df.shape}")
 print(f"Testing data shape: {test_df.shape}")
 
-train_df.to_csv('../../datalake/splits/train_df.csv', index=True)
-val_df.to_csv('../../datalake/splits/val_df.csv', index=True)
-test_df.to_csv('../../datalake/splits/test_df.csv', index=True)
+train_df.to_parquet('../../datalake/splits/train_df.parquet', index=True)
+val_df.to_parquet('../../datalake/splits/val_df.parquet', index=True)
+test_df.to_parquet('../../datalake/splits/test_df.parquet', index=True)

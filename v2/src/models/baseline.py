@@ -5,7 +5,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, RocCurveDisplay
 import matplotlib.pyplot as plt
 
-train_df = pd.read_csv('../../../datalake/splits/v2/train_df.csv')
+train_df = pd.read_parquet('../../../datalake/splits/v2/train_df.csv')
 with open ('../../../datalake/clean+features/features.txt','r') as f:
   feature_list = f.read().splitlines()
 train_df['DATETIME'] = pd.to_datetime(train_df['DATETIME'])
