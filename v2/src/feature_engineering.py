@@ -3,10 +3,9 @@ import numpy as np
 
 #1. Import dataset from CSV
 df = pd.read_csv('../datalake/processed_data.csv')
-feature_list = []
-
 #2. Convert DATETIME to datetime objects
 df['DATETIME'] = pd.to_datetime(df['DATETIME'])
+feature_list = ['ND','DATETIME']
 
 #3. TEMPORAL FEATURES
 df['YEAR'] = df['DATETIME'].dt.year
@@ -27,7 +26,11 @@ df['IS_WEEKEND'] = df['DAY_OF_WEEK'].apply(lambda x: 1 if x >= 5 else 0)
 
 feature_list.extend(['YEAR','MONTH','DAY','HOUR','MINUTE','DAY_OF_WEEK','WEEK_OF_YEAR','QUARTER','DAY_OF_WEEK_SIN','DAY_OF_WEEK_COS','HOUR_SIN','HOUR_COS','MONTH_SIN','MONTH_COS','IS_WEEKEND'])
 #4. CORE LOAD FEATURES
-for col in ['TSD', 'ND', 'ENGLAND_WALES_DEMAND']:
+df['ENGLAND_WALES_DEMAND_SHARE'] = df['ENGLAND_WALES_DEMAND'] / df['ND']
+df['TSD_SHARE'] = df['TSD'] / df['ND']
+feature_list.extend(['ENGLAND_WALES_DEMAND_SHARE', 'TSD_SHARE'])
+
+for col in ['TSD_SHARE', 'ND', 'ENGLAND_WALES_DEMAND_SHARE']:
   for lag in [1,2,3,48,336]:
     df[f'{col}_LAG_{lag}'] = df[col].shift(lag)
     feature_list.append(f'{col}_LAG_{lag}')
@@ -51,6 +54,7 @@ df["INTERCONNECTOR_NET"] = df[["IFA_FLOW","IFA2_FLOW","BRITNED_FLOW","MOYLE_FLOW
   "NEMO_FLOW","NSL_FLOW","ELECLINK_FLOW","VIKING_FLOW","GREENLINK_FLOW"]].sum(axis=1)
 df["IMPORT_SHARE"] = df["IMPORTS"] / (df['GENERATION'] + 1)
 df["SUPPLY_DEMAND_GAP"] = df["GENERATION"] + df["IMPORTS"] - df["ND"]
+df = df.copy()
 
 feature_list.extend(['NET_STORAGE', 'INTERCONNECTOR_NET', 'IMPORT_SHARE', 'SUPPLY_DEMAND_GAP'])
 #7. CARBON FEATURES
@@ -70,9 +74,15 @@ df["STORAGE_VS_RAMP"] = df["STORAGE"] * df["ND_RAMP_48"]
 df["GENERATION_VS_DEMAND"] = df["GENERATION"] * df["ND"]
 feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','INTERCONNECTOR_VS_DEMAND','STORAGE_VS_RAMP','GENERATION_VS_DEMAND'])
 
-#9. CREATE A .TXT FILE CONTAINING FEATURES
+#9. CREATE A .TXT FILE CONTAINING FEATURES AND WRITE A SEPARATE DATAFRAME
 
-print(len(feature_list))
+feature_df = pd.DataFrame()
 with open('../datalake/features.txt', 'w') as f:
   for feature in feature_list:
     f.write(feature + '\n')
+    feature_df[feature] = df[feature]
+
+feature_df.dropna(inplace=True)
+feature_df.set_index('DATETIME', inplace=True)
+
+feature_df.to_csv('../datalake/feature_df.csv', index=True)
