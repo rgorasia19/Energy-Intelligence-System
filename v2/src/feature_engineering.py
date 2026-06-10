@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 #1. Import dataset from CSV
-df = pd.read_csv('../../datalake/processed_data.csv')
+df = pd.read_csv('../../datalake/clean+features/processed_data.csv')
 #2. Convert DATETIME to datetime objects
 df['DATETIME'] = pd.to_datetime(df['DATETIME'])
 feature_list = ['ND','DATETIME']
@@ -85,4 +85,4 @@ with open('../../datalake/features.txt', 'w') as f:
 feature_df.dropna(inplace=True)
 feature_df.set_index('DATETIME', inplace=True)
 
-feature_df.to_csv('../../datalake/feature_df.csv', index=True)
+feature_df.to_csv('../../datalake/clean+features/feature_df.csv', index=True)

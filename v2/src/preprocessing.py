@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 #1. Import dataset from CSV
-df = pd.read_csv('../../datalake/full_data.csv')
+df = pd.read_csv('../../datalake/raw_data/full_data.csv')
 
 #2. Check for missing values
 #print("\nMissing values:")
@@ -20,5 +20,5 @@ for col in df.columns:
     
 
 #5. Save processed data
-df.to_csv('../../datalake/processed_data.csv', index=False)
-print("Processed data saved to ../../datalake/processed_data.csv")
+df.to_csv('../../datalake/clean+features/processed_data.csv', index=False)
+print("Processed data saved to ../../datalake/clean+features/processed_data.csv")
