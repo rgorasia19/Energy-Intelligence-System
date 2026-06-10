@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 #1. Import dataset from CSV
-df = pd.read_csv('../datalake/processed_data.csv')
+df = pd.read_csv('../../datalake/processed_data.csv')
 #2. Convert DATETIME to datetime objects
 df['DATETIME'] = pd.to_datetime(df['DATETIME'])
 feature_list = ['ND','DATETIME']
@@ -77,7 +77,7 @@ feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','INTERCONNECTOR_VS_DEMAND','ST
 #9. CREATE A .TXT FILE CONTAINING FEATURES AND WRITE A SEPARATE DATAFRAME
 
 feature_df = pd.DataFrame()
-with open('../datalake/features.txt', 'w') as f:
+with open('../../datalake/features.txt', 'w') as f:
   for feature in feature_list:
     f.write(feature + '\n')
     feature_df[feature] = df[feature]
@@ -85,4 +85,4 @@ with open('../datalake/features.txt', 'w') as f:
 feature_df.dropna(inplace=True)
 feature_df.set_index('DATETIME', inplace=True)
 
-feature_df.to_csv('../datalake/feature_df.csv', index=True)
+feature_df.to_csv('../../datalake/feature_df.csv', index=True)
