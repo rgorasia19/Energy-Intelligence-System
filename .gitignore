@@ -1,3 +1,3 @@
 .env
 feature_df.csv
-datalake/splits/train_df.csv
+datalake/splits/v2/train_df.csv
