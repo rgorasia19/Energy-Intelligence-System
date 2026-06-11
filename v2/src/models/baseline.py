@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, RocCurveDisplay
 import matplotlib.pyplot as plt
 
@@ -21,13 +21,19 @@ X_train_scaled = scaler.fit_transform(X_train)
 print(X_train_scaled.shape)
 print(Y_train.shape)
 
-model = RandomForestRegressor(n_estimators=500, max_depth=20, random_state=42, verbose = 1)
+model = XGBRegressor(n_estimators = 2000,
+                     early_stopping_rounds = 50,
+                     learning_rate = 0.01,
+                     max_depth = 10,
+                     n_jobs = -1,
+                     tree_method="hist")
+
 model.fit(X_train_scaled, Y_train)
 
 joblib.dump({"model": model,
             "scaler": scaler},
-            "baseline_rf.joblib")
-print("Model trained and saved to baseline_rf.joblib")
+            "baseline_xgb.joblib")
+print("Model trained and saved to baseline_xgb.joblib")
 
 val_df = pd.read_parquet('../../../datalake/splits/v2/val_df.parquet')
 X_val = val_df[feature_list]
