@@ -3,7 +3,7 @@ import numpy as np
 import joblib
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, RocCurveDisplay
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 
 train_df = pd.read_parquet('../../../datalake/splits/v2/train_df.parquet')
@@ -25,7 +25,7 @@ model = XGBRegressor(n_estimators = 2000,
                      learning_rate = 0.01,
                      max_depth = 10,
                      n_jobs = -1,
-                     tree_method="hist")
+                     tree_method="gpu_hist")
 
 model.fit(X_train_scaled, Y_train)
 
@@ -40,7 +40,5 @@ Y_val = val_df['ND']
 X_val_scaled = scaler.transform(X_val)
 
 val_predictions = model.predict(X_val_scaled)
-
-nb_disp = RocCurveDisplay.from_estimator(model,X_val_scaled,Y_val)
 plt.savefig("ROC_1.png", dpi = 600)
 plt.show()
