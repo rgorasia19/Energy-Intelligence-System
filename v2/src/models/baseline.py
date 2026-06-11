@@ -22,7 +22,6 @@ print(X_train_scaled.shape)
 print(Y_train.shape)
 
 model = XGBRegressor(n_estimators = 2000,
-                     early_stopping_rounds = 50,
                      learning_rate = 0.01,
                      max_depth = 10,
                      n_jobs = -1,
