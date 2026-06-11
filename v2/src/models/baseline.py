@@ -25,7 +25,7 @@ model = XGBRegressor(n_estimators = 2000,
                      learning_rate = 0.01,
                      max_depth = 10,
                      n_jobs = -1,
-                     tree_method="gpu_hist")
+                     tree_method="hist")
 
 model.fit(X_train_scaled, Y_train)
 
@@ -40,5 +40,6 @@ Y_val = val_df['ND']
 X_val_scaled = scaler.transform(X_val)
 
 val_predictions = model.predict(X_val_scaled)
-plt.savefig("ROC_1.png", dpi = 600)
-plt.show()
+print("MAE:", mean_absolute_error(Y_val, val_predictions))
+print("RMSE:", np.sqrt(mean_squared_error(Y_val, val_predictions)))
+print("R2:", r2_score(Y_val, val_predictions))
