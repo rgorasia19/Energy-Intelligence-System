@@ -10,11 +10,11 @@ train_df = pd.read_parquet('../../../datalake/splits/v2/train_df.parquet')
 with open ('../../../datalake/clean+features/features.txt','r') as f:
   feature_list = f.read().splitlines()
 
-feature_list.remove('ND')
+feature_list.remove('TARGET')
 feature_list.remove('DATETIME')
 
 X_train = train_df[feature_list]
-Y_train = train_df['ND']
+Y_train = train_df['TARGET']
 
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
@@ -23,7 +23,7 @@ print(Y_train.shape)
 
 val_df = pd.read_parquet('../../../datalake/splits/v2/val_df.parquet')
 X_val = val_df[feature_list]
-Y_val = val_df['ND']
+Y_val = val_df['TARGET']
 X_val_scaled = scaler.transform(X_val)
 
 model = XGBRegressor(n_estimators = 2000,
@@ -43,9 +43,9 @@ joblib.dump({"model": model,
             "scaler": scaler,
             "training": train_df,
             "validation": val_df,},
-            "baseline_xgb_4.joblib",
+            "baseline_xgb_5.joblib",
             compress=('lz4',3))
-print("Model trained and saved to baseline_xgb_4.joblib")
+print("Model trained and saved to baseline_xgb_5.joblib")
 
 val_predictions = model.predict(X_val_scaled)
 print("MAE:", mean_absolute_error(Y_val, val_predictions))

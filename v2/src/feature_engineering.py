@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
 
+HORIZON = 48
 #1. Import dataset from CSV
 df = pd.read_csv('../../datalake/clean+features/processed_data.csv')
 #2. Convert DATETIME to datetime objects
 df['DATETIME'] = pd.to_datetime(df['DATETIME'])
 df = df.sort_values('DATETIME').reset_index(drop=True)
-feature_list = ['ND','DATETIME']
+feature_list = ['TARGET','DATETIME']
+df["TARGET"] = df["ND"].shift(-HORIZON)
 
 #3. TEMPORAL FEATURES
 df['YEAR'] = df['DATETIME'].dt.year
