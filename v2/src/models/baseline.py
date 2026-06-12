@@ -21,23 +21,28 @@ X_train_scaled = scaler.fit_transform(X_train)
 print(X_train_scaled.shape)
 print(Y_train.shape)
 
+val_df = pd.read_parquet('../../../datalake/splits/v2/val_df.parquet')
+X_val = val_df[feature_list]
+Y_val = val_df['ND']
+X_val_scaled = scaler.transform(X_val)
+
 model = XGBRegressor(n_estimators = 2000,
-                     learning_rate = 0.01,
+                     learning_rate = 0.025,
                      max_depth = 10,
                      n_jobs = -1,
-                     tree_method="hist")
+                     tree_method="hist",
+                     early_stopping_rounds=50,
+                     device="cuda",
+                     verbosity=1)
 
-model.fit(X_train_scaled, Y_train)
+model.fit(X_train_scaled, Y_train,
+          eval_set=[(X_train_scaled, Y_train), (X_val_scaled, Y_val)],
+          verbose=100)
 
 joblib.dump({"model": model,
             "scaler": scaler},
             "baseline_xgb.joblib")
 print("Model trained and saved to baseline_xgb.joblib")
-
-val_df = pd.read_parquet('../../../datalake/splits/v2/val_df.parquet')
-X_val = val_df[feature_list]
-Y_val = val_df['ND']
-X_val_scaled = scaler.transform(X_val)
 
 val_predictions = model.predict(X_val_scaled)
 print("MAE:", mean_absolute_error(Y_val, val_predictions))
