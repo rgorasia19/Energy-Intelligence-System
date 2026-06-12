@@ -5,7 +5,7 @@ from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 
-bundle = joblib.load('../../v2/src/models/baseline_xgb.joblib')
+bundle = joblib.load('../../v2/src/models/baseline_xgb_2.joblib')
 
 model = bundle['model']
 scaler = bundle['scaler']
@@ -28,7 +28,7 @@ plt.plot(test_df.index[:2000], Y_test.values[:2000],color = 'blue', alpha = 0.5,
 plt.plot(test_df.index[:2000], test_predictions[:2000],color='red', alpha = 0.5,label='Predicted Demand')
 plt.legend()
 plt.title('Actual vs Predicted Demand')
-plt.savefig('actual_vs_pred.png',dpi=600)
+plt.savefig('actual_vs_pred_2.png',dpi=600)
 plt.show()
 
 print("MAE:", mean_absolute_error(Y_test, test_predictions))

@@ -6,3 +6,4 @@ joblib
 pyarrow
 seaborn
 xgboost
+lz4
