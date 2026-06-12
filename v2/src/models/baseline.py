@@ -40,9 +40,11 @@ model.fit(X_train_scaled, Y_train,
           verbose=100)
 
 joblib.dump({"model": model,
-            "scaler": scaler},
-            "baseline_xgb.joblib")
-print("Model trained and saved to baseline_xgb.joblib")
+            "scaler": scaler,
+            "training": train_df,
+            "validation": val_df,},
+            "baseline_xgb_2.joblib")
+print("Model trained and saved to baseline_xgb_2.joblib")
 
 val_predictions = model.predict(X_val_scaled)
 print("MAE:", mean_absolute_error(Y_val, val_predictions))
