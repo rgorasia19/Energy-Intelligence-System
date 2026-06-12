@@ -26,22 +26,6 @@ df['MONTH_COS'] = np.cos(2 * np.pi * df['MONTH'] / 12)
 df['IS_WEEKEND'] = df['DAY_OF_WEEK'].apply(lambda x: 1 if x >= 5 else 0)
 
 feature_list.extend(['YEAR','MONTH','DAY','HOUR','MINUTE','DAY_OF_WEEK','WEEK_OF_YEAR','QUARTER','DAY_OF_WEEK_SIN','DAY_OF_WEEK_COS','HOUR_SIN','HOUR_COS','MONTH_SIN','MONTH_COS','IS_WEEKEND'])
-#4. CORE LOAD FEATURES
-df['ENGLAND_WALES_DEMAND_SHARE'] = df['ENGLAND_WALES_DEMAND'] / df['ND']
-df['TSD_SHARE'] = df['TSD'] / df['ND']
-
-for col in ['TSD_SHARE', 'ND', 'ENGLAND_WALES_DEMAND_SHARE']:
-  for lag in [1,2,3,48,336]:
-    df[f'{col}_LAG_{lag}'] = df[col].shift(lag)
-    feature_list.append(f'{col}_LAG_{lag}')
-  df[f'{col}_MEAN_48'] = df[col].shift(1).rolling(window=48).mean()
-  feature_list.append(f'{col}_MEAN_48')
-  df[f'{col}_STD_48'] = df[col].shift(1).rolling(window=48).std()
-  feature_list.append(f'{col}_STD_48')
-  df[f'{col}_RAMP_48'] = df[col].shift(1) - df[col].shift(49)
-  feature_list.append(f'{col}_RAMP_48')
-  df[f'{col}_ACCELERATION_48'] = df[f'{col}_RAMP_48'] - df[f'{col}_RAMP_48'].shift(48)
-  feature_list.append(f'{col}_ACCELERATION_48')
     
 #5. SUPPLY COMPOSITION
 for col in ['GAS','COAL','NUCLEAR','HYDRO','WIND','SOLAR','BIOMASS']:
@@ -65,14 +49,6 @@ df["CARBON_ROLL_MEAN_48"] = df["CARBON_INTENSITY"].shift(1).rolling(window=48).m
 df["CARBON_PER_DEMAND"] = df["CARBON_INTENSITY"] / (df["ND"] + 1)
 df["RENEWABLES_VS_CARBON"] = (df["RENEWABLE"] / (df["GENERATION"] + 1)) * df["CARBON_INTENSITY"]
 feature_list.extend(['CARBON_ROLL_MEAN_48','RENEWABLES_VS_CARBON'])
-#8. CONTEXTUALS
-
-df["WIND_VS_RAMP"] = df["WIND_SHARE"] * df["ND_RAMP_48"]
-df["GAS_VS_RAMP"] = df["GAS_SHARE"] * df["ND_RAMP_48"]
-df["INTERCONNECTOR_VS_DEMAND"] = df["INTERCONNECTOR_NET"] * df["ND"]
-df["STORAGE_VS_RAMP"] = df["STORAGE"] * df["ND_RAMP_48"]
-df["GENERATION_VS_DEMAND"] = df["GENERATION"] * df["ND"]
-feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','STORAGE_VS_RAMP'])
 
 #9. CREATE A .TXT FILE CONTAINING FEATURES AND WRITE A SEPARATE DATAFRAME
 
