@@ -43,9 +43,9 @@ joblib.dump({"model": model,
             "scaler": scaler,
             "training": train_df,
             "validation": val_df,},
-            "baseline_xgb_2.joblib",
+            "baseline_xgb_3.joblib",
             compress=('lz4',3))
-print("Model trained and saved to baseline_xgb_2.joblib")
+print("Model trained and saved to baseline_xgb_3.joblib")
 
 val_predictions = model.predict(X_val_scaled)
 print("MAE:", mean_absolute_error(Y_val, val_predictions))
