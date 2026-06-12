@@ -29,7 +29,6 @@ feature_list.extend(['YEAR','MONTH','DAY','HOUR','MINUTE','DAY_OF_WEEK','WEEK_OF
 #4. CORE LOAD FEATURES
 df['ENGLAND_WALES_DEMAND_SHARE'] = df['ENGLAND_WALES_DEMAND'] / df['ND']
 df['TSD_SHARE'] = df['TSD'] / df['ND']
-feature_list.extend(['ENGLAND_WALES_DEMAND_SHARE', 'TSD_SHARE'])
 
 for col in ['TSD_SHARE', 'ND', 'ENGLAND_WALES_DEMAND_SHARE']:
   for lag in [1,2,3,48,336]:
@@ -57,7 +56,7 @@ df["IMPORT_SHARE"] = df["IMPORTS"] / (df['GENERATION'] + 1)
 df["SUPPLY_DEMAND_GAP"] = df["GENERATION"] + df["IMPORTS"] - df["ND"]
 df = df.copy()
 
-feature_list.extend(['NET_STORAGE', 'INTERCONNECTOR_NET', 'IMPORT_SHARE', 'SUPPLY_DEMAND_GAP'])
+feature_list.extend(['NET_STORAGE', 'INTERCONNECTOR_NET', 'IMPORT_SHARE'])
 #7. CARBON FEATURES
 for lag in [1,2,3,48,336]:
   df[f"CARBON_INTENSITY_LAG_{lag}"] = df["CARBON_INTENSITY"].shift(lag)
@@ -65,7 +64,7 @@ for lag in [1,2,3,48,336]:
 df["CARBON_ROLL_MEAN_48"] = df["CARBON_INTENSITY"].shift(1).rolling(window=48).mean()
 df["CARBON_PER_DEMAND"] = df["CARBON_INTENSITY"] / (df["ND"] + 1)
 df["RENEWABLES_VS_CARBON"] = (df["RENEWABLE"] / (df["GENERATION"] + 1)) * df["CARBON_INTENSITY"]
-feature_list.extend(['CARBON_ROLL_MEAN_48','CARBON_PER_DEMAND','RENEWABLES_VS_CARBON'])
+feature_list.extend(['CARBON_ROLL_MEAN_48','RENEWABLES_VS_CARBON'])
 #8. CONTEXTUALS
 
 df["WIND_VS_RAMP"] = df["WIND_SHARE"] * df["ND_RAMP_48"]
@@ -73,7 +72,7 @@ df["GAS_VS_RAMP"] = df["GAS_SHARE"] * df["ND_RAMP_48"]
 df["INTERCONNECTOR_VS_DEMAND"] = df["INTERCONNECTOR_NET"] * df["ND"]
 df["STORAGE_VS_RAMP"] = df["STORAGE"] * df["ND_RAMP_48"]
 df["GENERATION_VS_DEMAND"] = df["GENERATION"] * df["ND"]
-feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','INTERCONNECTOR_VS_DEMAND','STORAGE_VS_RAMP','GENERATION_VS_DEMAND'])
+feature_list.extend(['WIND_VS_RAMP','GAS_VS_RAMP','STORAGE_VS_RAMP'])
 
 #9. CREATE A .TXT FILE CONTAINING FEATURES AND WRITE A SEPARATE DATAFRAME
 
