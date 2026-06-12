@@ -5,6 +5,7 @@ import numpy as np
 df = pd.read_csv('../../datalake/clean+features/processed_data.csv')
 #2. Convert DATETIME to datetime objects
 df['DATETIME'] = pd.to_datetime(df['DATETIME'])
+df = df.sort_values('DATETIME').reset_index(drop=True)
 feature_list = ['ND','DATETIME']
 
 #3. TEMPORAL FEATURES
@@ -34,11 +35,11 @@ for col in ['TSD_SHARE', 'ND', 'ENGLAND_WALES_DEMAND_SHARE']:
   for lag in [1,2,3,48,336]:
     df[f'{col}_LAG_{lag}'] = df[col].shift(lag)
     feature_list.append(f'{col}_LAG_{lag}')
-  df[f'{col}_MEAN_48'] = df[col].rolling(window=48).mean()
+  df[f'{col}_MEAN_48'] = df[col].shift(1).rolling(window=48).mean()
   feature_list.append(f'{col}_MEAN_48')
-  df[f'{col}_STD_48'] = df[col].rolling(window=48).std()
+  df[f'{col}_STD_48'] = df[col].shift(1).rolling(window=48).std()
   feature_list.append(f'{col}_STD_48')
-  df[f'{col}_RAMP_48'] = df[col] - df[col].shift(48)
+  df[f'{col}_RAMP_48'] = df[col].shift(1) - df[col].shift(49)
   feature_list.append(f'{col}_RAMP_48')
   df[f'{col}_ACCELERATION_48'] = df[f'{col}_RAMP_48'] - df[f'{col}_RAMP_48'].shift(48)
   feature_list.append(f'{col}_ACCELERATION_48')
@@ -61,7 +62,7 @@ feature_list.extend(['NET_STORAGE', 'INTERCONNECTOR_NET', 'IMPORT_SHARE', 'SUPPL
 for lag in [1,2,3,48,336]:
   df[f"CARBON_INTENSITY_LAG_{lag}"] = df["CARBON_INTENSITY"].shift(lag)
   feature_list.append(f"CARBON_INTENSITY_LAG_{lag}")
-df["CARBON_ROLL_MEAN_48"] = df["CARBON_INTENSITY"].rolling(window=48).mean()
+df["CARBON_ROLL_MEAN_48"] = df["CARBON_INTENSITY"].shift(1).rolling(window=48).mean()
 df["CARBON_PER_DEMAND"] = df["CARBON_INTENSITY"] / (df["ND"] + 1)
 df["RENEWABLES_VS_CARBON"] = (df["RENEWABLE"] / (df["GENERATION"] + 1)) * df["CARBON_INTENSITY"]
 feature_list.extend(['CARBON_ROLL_MEAN_48','CARBON_PER_DEMAND','RENEWABLES_VS_CARBON'])
