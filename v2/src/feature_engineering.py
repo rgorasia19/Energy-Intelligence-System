@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-HORIZON = 48
+HORIZON = 336
 #1. Import dataset from CSV
 df = pd.read_csv('../../datalake/clean+features/processed_data.csv')
 #2. Convert DATETIME to datetime objects
