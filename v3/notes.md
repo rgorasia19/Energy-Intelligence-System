@@ -15,4 +15,13 @@ The following variance ratios were found:
 
 This suggests that interconnect flows a strong global state axis, generation has a dominant axis + clear secondary structure and capacity is more multi-dimensional and flexible.
 
-## Final Dataset
+## GMM Regime Analysis
+A Gaussian Mixture Model (4 components, full covariance) was fitted on the PCA features. 
+- **Persistence**: High (~97.5%), indicating the regimes capture stable macroeconomic or seasonal states rather than hourly noise.
+- **Balance**: The dataset is well-distributed among the four regimes.
+
+### Regime Interpretations
+* **Regime 1 (30.8%) - "Self-Sufficient / High Generation"**: Driven by extremely high domestic generation (`GEN_PC0`) and primary capacity (`CAP_PC0`), with very low reliance on primary interconnect flows (`INTER_PC0`). 
+* **Regime 0 (29.9%) - "Secondary Balancing"**: Primary generation is relatively average. This state is defined by high secondary interconnect flows (`INTER_PC1`), representing a balancing act between a subset of interconnector lines.
+* **Regime 2 (19.9%) - "High Import / Low Generation"**: The mirror opposite of Regime 1. High primary interconnect flow (`INTER_PC0`) and capacity utilization (`CAP_PC1`), but severely low domestic generation (`GEN_PC0`).
+* **Regime 3 (19.4%) - "Niche / Transition State"**: A smaller regime characterized by below-average generation and primary interconnect usage, instead relying on specific, lower-variance capacity lines (`CAP_PC2`).
