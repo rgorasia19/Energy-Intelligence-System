@@ -10,6 +10,7 @@ from feature_prep import TimeSeriesDataset
 
 def train_model():
   device = "cuda" if torch.cuda.is_available() else "cpu"
+  print(f"Using device: {device}")
 
   train_data = pd.read_parquet('../../datalake/hmm_tensors/train.parquet')
   val_data = pd.read_parquet('../../datalake/hmm_tensors/val.parquet')
@@ -48,6 +49,7 @@ def train_model():
     for epoch in range(num_epochs):
       train_loss = 0
       for x, y_label in train_loader:
+        x, y_label = x.to(device), y_label.to(device)
         optimizer.zero_grad()
         log_alpha = model(x)
         loss = model.compute_loss(log_alpha, y_label)
@@ -58,6 +60,7 @@ def train_model():
       val_loss = 0
       with torch.no_grad():
         for x, y_label in val_loader:
+          x, y_label = x.to(device), y_label.to(device)
           log_alpha = model(x)
           loss = model.compute_loss(log_alpha, y_label)
           val_loss += loss.item() * x.size(0)
