@@ -7,3 +7,5 @@ pyarrow
 seaborn
 xgboost
 lz4
+mlflow
+torch
