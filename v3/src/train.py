@@ -1,9 +1,11 @@
 import torch
+import torch.nn as nn
 import mlflow
 import mlflow.pytorch
 import pandas as pd
 import numpy as np
 from models.hmm import NeuralHMM
+from feature_prep import TimeSeriesDataset
 
 
 def train_model():
@@ -12,19 +14,24 @@ def train_model():
   train_data = pd.read_parquet('../../datalake/hmm_tensors/train.parquet')
   val_data = pd.read_parquet('../../datalake/hmm_tensors/val.parquet')
 
+  # Dynamically get feature columns
+  feature_cols = [c for c in train_data.columns if c != 'TARGET_ND']
+
   n_states = 4
-  n_features = 20
+  n_features = len(feature_cols)
 
   model = NeuralHMM(n_states=n_states, n_features=n_features).to(device)
   optimizer = torch.optim.Adam(model.parameters(), lr = 1e-4)
 
-  loss_fn = nn.NLLLoss()
-
   batch_size = 64
   num_epochs = 20
+  seq_length = 48
 
-  train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-  val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)
+  train_dataset = TimeSeriesDataset(train_data[feature_cols].values, train_data['TARGET_ND'].values, seq_length=seq_length)
+  val_dataset = TimeSeriesDataset(val_data[feature_cols].values, val_data['TARGET_ND'].values, seq_length=seq_length)
+
+  train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+  val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size)
 
   with mlflow.start_run():
     mlflow.log_param("learning_rate", 1e-4)
@@ -43,7 +50,7 @@ def train_model():
       for x, y_label in train_loader:
         optimizer.zero_grad()
         log_alpha = model(x)
-        loss = loss_fn(log_alpha, y_label)
+        loss = model.compute_loss(log_alpha, y_label)
         loss.backward()
         optimizer.step()
         train_loss += loss.item() * x.size(0)
@@ -52,7 +59,7 @@ def train_model():
       with torch.no_grad():
         for x, y_label in val_loader:
           log_alpha = model(x)
-          loss = loss_fn(log_alpha, y_label)
+          loss = model.compute_loss(log_alpha, y_label)
           val_loss += loss.item() * x.size(0)
 
       train_loss = train_loss / len(train_loader.dataset)
