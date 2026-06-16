@@ -93,7 +93,8 @@ def train_model():
       mlflow.log_metric("train_loss", train_loss, step=epoch)
       mlflow.log_metric("val_loss", val_loss, step=epoch)
 
-    mlflow.pytorch.log_model(model, 'HMM_model')
+    # Use serialization_format='pt2' for safety and 'name' to silence warnings
+    mlflow.pytorch.log_model(model, name='HMM_model', serialization_format='pt2')
 
 if __name__ == '__main__':
     train_model()
