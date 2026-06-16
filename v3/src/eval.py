@@ -3,6 +3,7 @@ import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from feature_prep import TimeSeriesDataset
 from torch.utils.data import DataLoader
@@ -12,6 +13,11 @@ from torch.utils.data import DataLoader
 model_uri = 'mlruns/0/models/m-95e6cf39fd7447e9a28bcabc4ae2e293/artifacts'
 model = mlflow.pytorch.load_model(model_uri)
 model.eval()
+
+# Load the target scaler saved during training
+scaler_path = mlflow.artifacts.download_artifacts(artifact_uri=f"{model_uri}/target_scaler.pkl")
+with open(scaler_path, "rb") as f:
+    target_scaler = pickle.load(f)
 
 # 2. Load Test Data
 # Adjust this path to point to your test set
@@ -53,7 +59,10 @@ with torch.no_grad():
 
 # 4. Evaluate Metrics
 Y_test_flat = np.concatenate(actual_targets)
-test_pred_flat = np.concatenate(test_predictions)
+test_pred_scaled = np.concatenate(test_predictions)
+
+# Inverse transform the scaled predictions back to actual MW demand!
+test_pred_flat = target_scaler.inverse_transform(test_pred_scaled.reshape(-1, 1)).flatten()
 
 mae = mean_absolute_error(Y_test_flat, test_pred_flat)
 rmse = np.sqrt(mean_squared_error(Y_test_flat, test_pred_flat))
