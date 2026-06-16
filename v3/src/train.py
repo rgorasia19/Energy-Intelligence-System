@@ -93,11 +93,9 @@ def train_model():
       mlflow.log_metric("train_loss", train_loss, step=epoch)
       mlflow.log_metric("val_loss", val_loss, step=epoch)
 
-    # Use serialization_format='pt2' for safety and 'name' to silence warnings
-    # pt2 requires an input_example to trace the model graph.
-    # Keep it as a tensor on the same device as the model so Dynamo doesn't crash!
-    input_sample = x[:1]
-    mlflow.pytorch.log_model(model, name='HMM_model', serialization_format='pt2', input_example=input_sample)
+    # MLflow's pt2 format is extremely finicky with TensorSpecs.
+    # Falling back to default 'pickle' format. You will see a security warning, but it will save successfully!
+    mlflow.pytorch.log_model(model, name='HMM_model')
 
 if __name__ == '__main__':
     train_model()
