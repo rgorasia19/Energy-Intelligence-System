@@ -94,7 +94,9 @@ def train_model():
       mlflow.log_metric("val_loss", val_loss, step=epoch)
 
     # Use serialization_format='pt2' for safety and 'name' to silence warnings
-    mlflow.pytorch.log_model(model, name='HMM_model', serialization_format='pt2')
+    # pt2 requires an input_example to trace the model graph
+    input_sample = x[:1].cpu().numpy()
+    mlflow.pytorch.log_model(model, name='HMM_model', serialization_format='pt2', input_example=input_sample)
 
 if __name__ == '__main__':
     train_model()
