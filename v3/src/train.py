@@ -92,6 +92,7 @@ def train_model():
 
       mlflow.log_metric("train_loss", train_loss, step=epoch)
       mlflow.log_metric("val_loss", val_loss, step=epoch)
+      print(f"Epoch {epoch+1}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
     # MLflow's pt2 format is extremely finicky with TensorSpecs.
     # Falling back to default 'pickle' format. You will see a security warning, but it will save successfully!
