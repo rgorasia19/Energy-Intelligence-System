@@ -35,7 +35,7 @@ def train_model():
 
   optimizer = torch.optim.Adam(model.parameters(), lr = 1e-4)
   # GradScaler for Mixed Precision training
-  scaler = torch.cuda.amp.GradScaler()
+  scaler = torch.amp.GradScaler('cuda')
 
   # Massively increased batch size to saturate the RTX 4500 GPU
   batch_size = 2048
