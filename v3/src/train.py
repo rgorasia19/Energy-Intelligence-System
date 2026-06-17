@@ -76,6 +76,21 @@ def train_model():
   train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
   val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
 
+  # Warm-start the emission MLP so that it initially acts as an identity mapping 
+  # for the GMM centroids we just initialized!
+  print("Warm-starting emission_net via MSE regression...")
+  mse_loss = nn.MSELoss()
+  warmup_opt = torch.optim.Adam(model.feature_net.parameters(), lr=1e-3)
+  for _ in range(5):
+      for x, _ in train_loader:
+          x = x.to(device)
+          warmup_opt.zero_grad()
+          x_emb = model.feature_net(x)
+          loss = mse_loss(x_emb, x)
+          loss.backward()
+          warmup_opt.step()
+  print("Warm-start complete.")
+
   with mlflow.start_run():
     mlflow.log_param("learning_rate", 1e-3)
     mlflow.log_param("n_states", n_states)
@@ -101,15 +116,16 @@ def train_model():
         optimizer.zero_grad()
         
         # Disabled AMP for debugging numerical stability
-        log_alpha = model(x)
-        loss = model.compute_loss(log_alpha, y_label)
+        log_alpha, gamma = model(x)
+        loss = model.compute_loss(log_alpha, gamma, y_label)
         
         if epoch == 0 and batch_idx == 0:
             print("log_alpha mean:", log_alpha.mean().item())
-            print("log_alpha std:", log_alpha.std().item())
+            print("gamma mean:", gamma.mean().item())
             print("initial loss:", loss.item())
             
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
         train_loss += loss.item() * x.size(0)
@@ -120,8 +136,8 @@ def train_model():
           x, y_label = x.to(device), y_label.to(device)
           
           # Disabled AMP for debugging numerical stability
-          log_alpha = model(x)
-          loss = model.compute_loss(log_alpha, y_label)
+          log_alpha, gamma = model(x)
+          loss = model.compute_loss(log_alpha, gamma, y_label)
           
           val_loss += loss.item() * x.size(0)
 

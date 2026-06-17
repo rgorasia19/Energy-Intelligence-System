@@ -47,13 +47,12 @@ with torch.no_grad():
         x = x.to(device)
         
         # Remove AMP for evaluation correctness
-        log_alpha = model(x)
+        log_alpha, gamma = model(x)
             
-        # Get final state log probabilities at timestep T
-        log_alpha_T = log_alpha[:, -1, :]
+        # True smoothed posterior at timestep T (P(z_T | x_1:T))
+        probs = gamma[:, -1, :]
         
         # Probabilistic Decoding: Expected value over all states E[y | x]
-        probs = torch.softmax(log_alpha_T, dim=1)
         pred_means = (probs * model.y_means).sum(dim=1)
         
         if len(test_predictions) == 0:  # Print for the very first batch
@@ -63,16 +62,14 @@ with torch.no_grad():
             print("------------------------------------")
             
         # --- Diagnostics ---
-        # 1. State Occupancy (most likely state)
-        _, states = torch.max(log_alpha_T, dim=1)
-        
+        # 1. State Occupancy (soft expectation, no argmax!)
         # 2. Posterior Entropy: -sum(p * log(p))
-        log_probs = torch.log_softmax(log_alpha_T, dim=1)
-        entropies = -(probs * log_probs).sum(dim=1)
+        entropies = -(probs * torch.log(probs + 1e-8)).sum(dim=1)
         
         test_predictions.append(pred_means.cpu().numpy())
         actual_targets.append(y_label.numpy())
-        all_states.append(states.cpu().numpy())
+        # Store full posterior distributions for export instead of integers
+        all_states.append(probs.cpu().numpy())
         all_entropies.append(entropies.cpu().numpy())
 
 # 4. Evaluate Metrics
@@ -94,10 +91,11 @@ print(f"RMSE: {rmse}")
 print(f"R2: {r2}")
 
 print("\n--- Diagnostics ---")
-occupancy = pd.Series(all_states_flat).value_counts(normalize=True).sort_index()
-print("State Occupancy:")
-for state, freq in occupancy.items():
-    print(f"  Regime {state}: {freq*100:.2f}%")
+# Expected Occupancy = average of probabilities across test set
+expected_occupancy = all_states_flat.mean(axis=0)
+print("Expected State Occupancy:")
+for state, mass in enumerate(expected_occupancy):
+    print(f"  Regime {state}: {mass*100:.2f}%")
 print(f"Mean Posterior Entropy: {all_entropies_flat.mean():.4f}")
 print("-------------------\n")
 
