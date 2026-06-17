@@ -32,6 +32,7 @@ class NeuralHMM(nn.Module):
     log_emission = self.emission_log_prob(x[:, 0, :])
     # log_pi: (n_states,), log_emission: (batch_size, n_states)
     log_alpha_t = log_pi.unsqueeze(0) + log_emission
+    log_alpha_t = log_alpha_t - torch.logsumexp(log_alpha_t, dim=-1, keepdim=True)
     log_alpha.append(log_alpha_t)
 
     #Forward algorithm
@@ -45,6 +46,7 @@ class NeuralHMM(nn.Module):
         log_alpha_t = torch.logsumexp(prev + log_trans.unsqueeze(0), dim=1)
             
         log_alpha_t = log_alpha_t + self.emission_log_prob(x[:, t, :])
+        log_alpha_t = log_alpha_t - torch.logsumexp(log_alpha_t, dim=-1, keepdim=True)
         log_alpha.append(log_alpha_t)
 
     # Output shape: (batch_size, seq_len, n_states)
@@ -79,5 +81,6 @@ class NeuralHMM(nn.Module):
     # Joint log likelihood: log P(x_{1:T}, y) = logsumexp_{z_T} (log P(z_T, x_{1:T}) + log P(y | z_T))
     joint_log_likelihood = torch.logsumexp(log_alpha_T + log_prob_y, dim=1) # (batch_size,)
     
-    # Minimize negative log likelihood
-    return -joint_log_likelihood.mean()
+    # Minimize negative log likelihood, scaled by sequence length to ensure loss is O(1)
+    seq_length = log_alpha.shape[1]
+    return -(joint_log_likelihood / seq_length).mean()

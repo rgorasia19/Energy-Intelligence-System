@@ -50,8 +50,9 @@ def train_model():
   with torch.no_grad():
       model.means.copy_(torch.tensor(gmm.means_[:, :-1], dtype=torch.float32).to(device))
       model.y_means.copy_(torch.tensor(gmm.means_[:, -1], dtype=torch.float32).to(device))
-      model.log_vars.copy_(torch.tensor(np.log(gmm.covariances_[:, :-1]), dtype=torch.float32).to(device))
-      model.y_log_vars.copy_(torch.tensor(np.log(gmm.covariances_[:, -1]), dtype=torch.float32).to(device))
+      cov = np.clip(gmm.covariances_, 1e-3, None)
+      model.log_vars.copy_(torch.tensor(np.log(cov[:, :-1]), dtype=torch.float32).to(device))
+      model.y_log_vars.copy_(torch.tensor(np.log(cov[:, -1]), dtype=torch.float32).to(device))
   
   # Compile model to fuse GPU operations and reduce Python overhead (PyTorch 2.0+)
   try:
@@ -61,8 +62,6 @@ def train_model():
 
   # Increase learning rate for stable, faster convergence
   optimizer = torch.optim.Adam(model.parameters(), lr = 1e-3)
-  # GradScaler for Mixed Precision training
-  scaler = torch.amp.GradScaler('cuda')
 
   # Massively increased batch size to saturate the RTX 4500 GPU
   batch_size = 2048
@@ -78,7 +77,7 @@ def train_model():
   val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
 
   with mlflow.start_run():
-    mlflow.log_param("learning_rate", 1e-4)
+    mlflow.log_param("learning_rate", 1e-3)
     mlflow.log_param("n_states", n_states)
     mlflow.log_param("n_features", n_features)
     mlflow.log_param("batch_size", batch_size)
@@ -97,18 +96,21 @@ def train_model():
 
     for epoch in range(num_epochs):
       train_loss = 0
-      for x, y_label in train_loader:
+      for batch_idx, (x, y_label) in enumerate(train_loader):
         x, y_label = x.to(device), y_label.to(device)
         optimizer.zero_grad()
         
-        # Automatic Mixed Precision for high throughput
-        with torch.autocast(device_type='cuda' if 'cuda' in device else 'cpu', dtype=torch.bfloat16):
-            log_alpha = model(x)
-            loss = model.compute_loss(log_alpha, y_label)
+        # Disabled AMP for debugging numerical stability
+        log_alpha = model(x)
+        loss = model.compute_loss(log_alpha, y_label)
+        
+        if epoch == 0 and batch_idx == 0:
+            print("log_alpha mean:", log_alpha.mean().item())
+            print("log_alpha std:", log_alpha.std().item())
+            print("initial loss:", loss.item())
             
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        loss.backward()
+        optimizer.step()
         
         train_loss += loss.item() * x.size(0)
       
@@ -116,9 +118,11 @@ def train_model():
       with torch.no_grad():
         for x, y_label in val_loader:
           x, y_label = x.to(device), y_label.to(device)
-          with torch.autocast(device_type='cuda' if 'cuda' in device else 'cpu', dtype=torch.bfloat16):
-              log_alpha = model(x)
-              loss = model.compute_loss(log_alpha, y_label)
+          
+          # Disabled AMP for debugging numerical stability
+          log_alpha = model(x)
+          loss = model.compute_loss(log_alpha, y_label)
+          
           val_loss += loss.item() * x.size(0)
 
       train_loss = train_loss / len(train_loader.dataset)
