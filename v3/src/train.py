@@ -150,7 +150,7 @@ def train_model():
 
     # MLflow's pt2 format is extremely finicky with TensorSpecs.
     # Falling back to default 'pickle' format. You will see a security warning, but it will save successfully!
-    mlflow.pytorch.log_model(model, name='HMM_model')
+    mlflow.pytorch.log_model(model, name='HMM_model', serialization_format='pickle')
 
 if __name__ == '__main__':
     train_model()
