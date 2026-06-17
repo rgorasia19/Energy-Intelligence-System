@@ -15,8 +15,8 @@ model = mlflow.pytorch.load_model(model_uri)
 model.eval()
 
 # Load the target scaler saved during training
-scaler_path = mlflow.artifacts.download_artifacts(artifact_uri=f"{model_uri}/target_scaler.pkl")
-with open(scaler_path, "rb") as f:
+# Since you pulled it down via git, it's sitting right in your current directory!
+with open("target_scaler.pkl", "rb") as f:
     target_scaler = pickle.load(f)
 
 # 2. Load Test Data
@@ -31,38 +31,59 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)
 
 seq_length = 48
-test_dataset = TimeSeriesDataset(X_test, Y_test, seq_length=seq_length)
+# Scale targets so evaluation dataset matches training space exactly
+Y_test_scaled = target_scaler.transform(Y_test.reshape(-1, 1)).flatten()
+test_dataset = TimeSeriesDataset(X_test, Y_test_scaled, seq_length=seq_length)
 test_loader = DataLoader(test_dataset, batch_size=2048, shuffle=False)
 
 test_predictions = []
 actual_targets = []
+all_states = []
+all_entropies = []
 
 # 3. Generate Predictions
 with torch.no_grad():
     for x, y_label in test_loader:
         x = x.to(device)
         
-        with torch.autocast(device_type='cuda' if 'cuda' in device else 'cpu', dtype=torch.bfloat16):
-            log_alpha = model(x)
+        # Remove AMP for evaluation correctness
+        log_alpha = model(x)
             
         # Get final state log probabilities at timestep T
         log_alpha_T = log_alpha[:, -1, :]
         
-        # Find the most likely hidden state
+        # Probabilistic Decoding: Expected value over all states E[y | x]
+        probs = torch.softmax(log_alpha_T, dim=1)
+        pred_means = (probs * model.y_means).sum(dim=1)
+        
+        if len(test_predictions) == 0:  # Print for the very first batch
+            print("--- Sanity Checks (Scaled Space) ---")
+            print("Pred mean:", pred_means.mean().item())
+            print("Target mean:", y_label.mean().item())
+            print("------------------------------------")
+            
+        # --- Diagnostics ---
+        # 1. State Occupancy (most likely state)
         _, states = torch.max(log_alpha_T, dim=1)
         
-        # Decode the predicted target demand using the state's y_means parameter
-        pred_means = model.y_means[states]
+        # 2. Posterior Entropy: -sum(p * log(p))
+        log_probs = torch.log_softmax(log_alpha_T, dim=1)
+        entropies = -(probs * log_probs).sum(dim=1)
         
         test_predictions.append(pred_means.cpu().numpy())
         actual_targets.append(y_label.numpy())
+        all_states.append(states.cpu().numpy())
+        all_entropies.append(entropies.cpu().numpy())
 
 # 4. Evaluate Metrics
-Y_test_flat = np.concatenate(actual_targets)
+Y_test_flat_scaled = np.concatenate(actual_targets)
 test_pred_scaled = np.concatenate(test_predictions)
+all_states_flat = np.concatenate(all_states)
+all_entropies_flat = np.concatenate(all_entropies)
 
-# Inverse transform the scaled predictions back to actual MW demand!
+# Inverse transform the scaled predictions and targets back to actual MW demand!
 test_pred_flat = target_scaler.inverse_transform(test_pred_scaled.reshape(-1, 1)).flatten()
+Y_test_flat = target_scaler.inverse_transform(Y_test_flat_scaled.reshape(-1, 1)).flatten()
 
 mae = mean_absolute_error(Y_test_flat, test_pred_flat)
 rmse = np.sqrt(mean_squared_error(Y_test_flat, test_pred_flat))
@@ -71,6 +92,14 @@ r2 = r2_score(Y_test_flat, test_pred_flat)
 print(f"MAE: {mae}")
 print(f"RMSE: {rmse}")
 print(f"R2: {r2}")
+
+print("\n--- Diagnostics ---")
+occupancy = pd.Series(all_states_flat).value_counts(normalize=True).sort_index()
+print("State Occupancy:")
+for state, freq in occupancy.items():
+    print(f"  Regime {state}: {freq*100:.2f}%")
+print(f"Mean Posterior Entropy: {all_entropies_flat.mean():.4f}")
+print("-------------------\n")
 
 # 5. Plot Results (First N samples)
 plt.figure(figsize=(12, 6))
