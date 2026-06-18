@@ -60,8 +60,8 @@ def train_model():
   except Exception as e:
       print("Could not compile model, continuing without torch.compile:", e)
 
-  # Increase learning rate for stable, faster convergence
-  optimizer = torch.optim.Adam(model.parameters(), lr = 1e-3)
+  # Increase learning rate for stable, faster convergence, and add weight decay for regularisation
+  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
 
   # Massively increased batch size to saturate the RTX 4500 GPU
   batch_size = 2048
@@ -111,6 +111,7 @@ def train_model():
 
     for epoch in range(num_epochs):
       train_loss = 0
+      model.train() # Enable Dropout
       for batch_idx, (x, y_label) in enumerate(train_loader):
         x, y_label = x.to(device), y_label.to(device)
         optimizer.zero_grad()
@@ -131,6 +132,7 @@ def train_model():
         train_loss += loss.item() * x.size(0)
       
       val_loss = 0
+      model.eval() # Disable Dropout for validation
       with torch.no_grad():
         for x, y_label in val_loader:
           x, y_label = x.to(device), y_label.to(device)

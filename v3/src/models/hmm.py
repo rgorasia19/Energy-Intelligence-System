@@ -13,6 +13,7 @@ class NeuralHMM(nn.Module):
     self.feature_net = nn.Sequential(
         nn.Linear(n_features, 64),
         nn.ReLU(),
+        nn.Dropout(0.2), # Dropout to prevent overfitting
         nn.Linear(64, n_features)
     )
 
