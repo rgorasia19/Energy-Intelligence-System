@@ -10,8 +10,11 @@ from torch.utils.data import DataLoader
 
 # 1. Load the best model
 # Point directly to the MLflow artifact directory, NOT the raw .pth file!
-model_uri = 'mlruns/0/models/m-95e6cf39fd7447e9a28bcabc4ae2e293/artifacts'
-model = mlflow.pytorch.load_model(model_uri)
+model_uri = 'mlruns_new/0/models/m-75c9fcd2970041af823acdf7aac01182/artifacts'
+model = mlflow.pytorch.load_model(model_uri, map_location=torch.device('cpu'))
+
+# Extract the original module if it was saved as a torch.compile wrapper!
+model = getattr(model, '_orig_mod', model)
 model.eval()
 
 # Load the target scaler saved during training
