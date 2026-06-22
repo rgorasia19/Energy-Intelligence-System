@@ -30,41 +30,31 @@ def load_data(pca_path, raw_path):
 
 def create_features(df, demand_cols):
     """
-    Create temporal encodings, lags, and rolling statistics.
+    Create clean low-dimensional features for HMM (Curated macro set, no lags).
     """
-    # 2. Temporal encoding
-    df['HOUR'] = df.index.hour
-    df['DAY_OF_WEEK'] = df.index.dayofweek
-    df['HOUR_SIN'] = np.sin(2 * np.pi * df['HOUR'] / 24)
-    df['HOUR_COS'] = np.cos(2 * np.pi * df['HOUR'] / 24)
-    df['DOW_SIN'] = np.sin(2 * np.pi * df['DAY_OF_WEEK'] / 7)
-    df['DOW_COS'] = np.cos(2 * np.pi * df['DAY_OF_WEEK'] / 7)
-    df.drop(columns=['HOUR', 'DAY_OF_WEEK'], inplace=True)
+    hmm_features = ['ND', 'INTER_PC0', 'GEN_PC0', 'CAP_PC0']
     
-    # 3. Lag structure
-    # Applying to all features currently in the dataframe (PCA + demand + temporal)
-    lags = [1, 2, 3, 24, 48]
-    base_features = df.columns.tolist()
+    # Select only these features
+    df_feat = df[hmm_features].copy()
     
-    for lag in lags:
-        shifted = df[base_features].shift(lag)
-        shifted.columns = [f"{c}_LAG_{lag}" for c in base_features]
-        df = pd.concat([df, shifted], axis=1)
-        
-    # 4. Rolling statistics
-    # 24h = 48 half-hour periods. Shift(1) ensures no target leakage
-    for col in demand_cols:
-        df[f"{col}_ROLL_MEAN_24h"] = df[col].shift(1).rolling(window=48).mean()
-        df[f"{col}_ROLL_STD_24h"] = df[col].shift(1).rolling(window=48).std()
-        
     # Define aligned target (next-step horizon)
-    df['TARGET_ND'] = df['ND'].shift(-1)
+    df_feat['TARGET_ND'] = df['ND'].shift(-1)
     
     # Handle NaNs explicitly
-    df.dropna(inplace=True)
+    df_feat.dropna(inplace=True)
     
-    # Cast to float16 to save memory and file size
-    return df.astype(np.float16)
+    # Compute rank and condition number to validate structure
+    cov_matrix = np.cov(StandardScaler().fit_transform(df_feat[hmm_features].values), rowvar=False)
+    rank = np.linalg.matrix_rank(cov_matrix)
+    cond_num = np.linalg.cond(cov_matrix)
+    print(f"[HYGIENE CHECK] Feature columns: {hmm_features}")
+    print(f"[HYGIENE CHECK] Covariance rank: {rank}/{len(hmm_features)}")
+    print(f"[HYGIENE CHECK] Condition number: {cond_num:.2f}")
+    if rank < len(hmm_features):
+        print("[WARNING] Collinear feature space! Covariance rank is less than feature count.")
+        
+    # Cast to float32 for numerical stability (no float16)
+    return df_feat.astype(np.float32)
 
 def train_val_test_split(df, train_ratio=0.7, val_ratio=0.15):
     """
@@ -145,10 +135,10 @@ def main():
     
     print("5. Saving data to compressed Parquet format...")
     # Parquet provides excellent columnar compression and preserves feature names
-    # Casting to float16 strictly ensures the file sizes are tiny and comfortably under GitHub's 100MB limit
-    train_df = train_df.astype(np.float16)
-    val_df = val_df.astype(np.float16)
-    test_df = test_df.astype(np.float16)
+    # Use float32 to ensure numerical stability and avoid EM collapse
+    train_df = train_df.astype(np.float32)
+    val_df = val_df.astype(np.float32)
+    test_df = test_df.astype(np.float32)
     
     train_df.to_parquet(os.path.join(out_dir, 'train.parquet'), index=True, compression='brotli')
     val_df.to_parquet(os.path.join(out_dir, 'val.parquet'), index=True, compression='brotli')

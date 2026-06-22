@@ -29,6 +29,16 @@ feature_cols = [c for c in test_df.columns if c != 'TARGET_ND']
 X_test = test_df[feature_cols].values
 Y_test = test_df['TARGET_ND'].values
 
+# Compute rank and condition number to validate structure
+from sklearn.preprocessing import StandardScaler
+X_test_scaled_check = StandardScaler().fit_transform(X_test)
+cov_matrix = np.cov(X_test_scaled_check, rowvar=False)
+rank = np.linalg.matrix_rank(cov_matrix)
+cond_num = np.linalg.cond(cov_matrix)
+print(f"[HYGIENE CHECK] Test features: {feature_cols}")
+print(f"[HYGIENE CHECK] Covariance rank: {rank}/{len(feature_cols)}")
+print(f"[HYGIENE CHECK] Condition number: {cond_num:.2f}")
+
 # Convert to PyTorch Tensors and move to device
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model.to(device)

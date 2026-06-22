@@ -41,3 +41,6 @@ Combines a traditional HMM with a neural network.
 
 ## Loss Function
 The loss function is a combination of the HMM joint likelihood and a transition matrix regularisation term.
+
+## Trials
+- no.1 : Overfit and only captured Regime 2 with no entropy.

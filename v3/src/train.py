@@ -22,6 +22,20 @@ def train_model():
   train_data = pd.read_parquet('../../datalake/hmm_tensors/train.parquet')
   val_data = pd.read_parquet('../../datalake/hmm_tensors/val.parquet')
 
+  # Dynamically get feature columns
+  feature_cols = [c for c in train_data.columns if c != 'TARGET_ND']
+
+  # Validate rank and condition number to prevent training on singular/degenerate features
+  X_train_scaled_check = StandardScaler().fit_transform(train_data[feature_cols].values)
+  cov_matrix = np.cov(X_train_scaled_check, rowvar=False)
+  rank = np.linalg.matrix_rank(cov_matrix)
+  cond_num = np.linalg.cond(cov_matrix)
+  print(f"[HYGIENE CHECK] Feature columns: {feature_cols}")
+  print(f"[HYGIENE CHECK] Covariance rank: {rank}/{len(feature_cols)}")
+  print(f"[HYGIENE CHECK] Condition number: {cond_num:.2f}")
+  if rank < len(feature_cols):
+      raise ValueError(f"CRITICAL: Feature covariance matrix is singular (rank {rank} < {len(feature_cols)})! Check features.")
+
   # 1. Target Scaling (CRITICAL)
   target_scaler = StandardScaler()
   y_train_raw = train_data['TARGET_ND'].values.reshape(-1, 1)
@@ -29,9 +43,6 @@ def train_model():
   
   y_train_scaled = target_scaler.fit_transform(y_train_raw).flatten()
   y_val_scaled = target_scaler.transform(y_val_raw).flatten()
-
-  # Dynamically get feature columns
-  feature_cols = [c for c in train_data.columns if c != 'TARGET_ND']
 
   n_states = 4
   n_features = len(feature_cols)
@@ -72,9 +83,10 @@ def train_model():
   train_dataset = TimeSeriesDataset(X_train, y_train_scaled, seq_length=seq_length)
   val_dataset = TimeSeriesDataset(val_data[feature_cols].values, y_val_scaled, seq_length=seq_length)
 
-  # Added multiprocessing (num_workers) and pin_memory to prevent the GPU from waiting on data
-  train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
-  val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=4, pin_memory=True)
+  # Dynamic num_workers to prevent Windows multiprocessing errors
+  num_workers = 4 if device == "cuda" else 0
+  train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=(device == "cuda"))
+  val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=(device == "cuda"))
 
   # Warm-start the emission MLP so that it initially acts as an identity mapping 
   # for the GMM centroids we just initialized!
