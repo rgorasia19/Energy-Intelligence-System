@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/ronak/OneDrive/Desktop/Random/Energy-Intelligence-System/v3/src/mlruns/0/models/m-95e6cf39fd7447e9a28bcabc4ae2e293/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.14.3
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.11.0+cpu
+mlflow_version: 3.13.0
+model_id: m-95e6cf39fd7447e9a28bcabc4ae2e293
+model_size_bytes: 9497
+model_uuid: m-95e6cf39fd7447e9a28bcabc4ae2e293
+prompts: null
+run_id: 6e8239af930b4bb3a038b6cb6aac381c
+utc_time_created: '2026-06-16 19:40:13.162758'

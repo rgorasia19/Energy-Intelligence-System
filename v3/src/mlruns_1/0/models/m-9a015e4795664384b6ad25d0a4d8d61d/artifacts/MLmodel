@@ -1,0 +1,23 @@
+artifact_path: /Energy-Intelligence-System/v3/src/mlruns/0/models/m-9a015e4795664384b6ad25d0a4d8d61d/artifacts
+flavors:
+  python_function:
+    config:
+      device: null
+    data: data
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.12.3
+  pytorch:
+    code: null
+    model_data: data
+    pytorch_version: 2.12.1+cu130
+mlflow_version: 3.14.0
+model_id: m-9a015e4795664384b6ad25d0a4d8d61d
+model_size_bytes: 33217
+model_uuid: m-9a015e4795664384b6ad25d0a4d8d61d
+prompts: null
+run_id: 1e59b2561ed34851b32d04144db0ea47
+utc_time_created: '2026-06-22 15:19:44.071409'
