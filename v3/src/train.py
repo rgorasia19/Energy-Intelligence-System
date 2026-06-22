@@ -16,7 +16,7 @@ torch.backends.cudnn.allow_tf32 = True
 
 
 def train_model():
-  device = "cuda" if torch.cuda.is_available() else "cpu"
+  device = "cuda"
   print(f"Using device: {device}")
 
   train_data = pd.read_parquet('../../datalake/hmm_tensors/train.parquet')
