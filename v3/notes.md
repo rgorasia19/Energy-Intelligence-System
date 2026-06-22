@@ -25,3 +25,19 @@ A Gaussian Mixture Model (4 components, full covariance) was fitted on the PCA f
 * **Regime 0 (29.9%) - "Secondary Balancing"**: Primary generation is relatively average. This state is defined by high secondary interconnect flows (`INTER_PC1`), representing a balancing act between a subset of interconnector lines.
 * **Regime 2 (19.9%) - "High Import / Low Generation"**: The mirror opposite of Regime 1. High primary interconnect flow (`INTER_PC0`) and capacity utilization (`CAP_PC1`), but severely low domestic generation (`GEN_PC0`).
 * **Regime 3 (19.4%) - "Niche / Transition State"**: A smaller regime characterized by below-average generation and primary interconnect usage, instead relying on specific, lower-variance capacity lines (`CAP_PC2`).
+
+
+# Neural HMM model
+## Overview
+Combines a traditional HMM with a neural network.
+- The HMM captures the temporal dependencies between states.
+- The neural network captures the non-linear relationships between inputs and outputs.
+- This means that the model can learn complex temporal dynamics and dependencies that would be difficult to capture with a traditional HMM.
+
+## Architecture
+- **Feature Embedding Network**: Embeds the input features into a lower-dimensional space.
+- **Transition Matrix**: Captures the temporal dependencies between states.
+- **Emission**: Captures the non-linear relationships between inputs and outputs.
+
+## Loss Function
+The loss function is a combination of the HMM joint likelihood and a transition matrix regularisation term.
