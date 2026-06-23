@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 # 1. Load the best model
 # Point directly to the MLflow artifact directory, NOT the raw .pth file!
-model_uri = 'mlruns_new/0/models/m-75c9fcd2970041af823acdf7aac01182/artifacts'
+model_uri = 'mlruns/0/models/m-7ab09c730b164633989548b8c02e22de/artifacts'
 model = mlflow.pytorch.load_model(model_uri, map_location=torch.device('cpu'))
 
 # Extract the original module if it was saved as a torch.compile wrapper!
