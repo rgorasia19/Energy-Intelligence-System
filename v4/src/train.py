@@ -34,8 +34,12 @@ def get_anchor_penalty(model, anchors):
             loss += torch.sum((param - anchors[name]) ** 2)
     return loss
 
+# Enable TensorFloat-32 (TF32) for massive speedups on Ampere/Ada/Blackwell GPUs
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
 def train():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = "cuda"
     print(f"Using device: {device}")
 
     data_dir = '../../datalake/moe_tensors/'
