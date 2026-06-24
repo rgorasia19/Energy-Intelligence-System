@@ -96,13 +96,9 @@ def evaluate():
             actual_targets.append(y_label.numpy())
             all_weights.append(weights.cpu().numpy())
             
-    test_pred_scaled = np.concatenate(test_predictions).flatten()
-    actual_targets_scaled = np.concatenate(actual_targets).flatten()
+    test_pred_flat = np.concatenate(test_predictions).flatten()
+    actual_targets_flat = np.concatenate(actual_targets).flatten()
     all_weights_flat = np.concatenate(all_weights)
-    
-    # Inverse transform
-    test_pred_flat = target_scaler.inverse_transform(test_pred_scaled.reshape(-1, 1)).flatten()
-    actual_targets_flat = target_scaler.inverse_transform(actual_targets_scaled.reshape(-1, 1)).flatten()
     
     print("--- Evaluating Metrics ---")
     mae = mean_absolute_error(actual_targets_flat, test_pred_flat)
