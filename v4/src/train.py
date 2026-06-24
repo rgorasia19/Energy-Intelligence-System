@@ -219,7 +219,12 @@ def train():
             
             print(f"Joint Epoch {epoch+1}/{epochs_joint} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} - Tau: {tau:.2f}")
 
-        mlflow.pytorch.log_model(model, "temporal_moe")
+        # Log the required feature groups and scaler as artifacts for inference
+        mlflow.log_artifact(os.path.join(data_dir, 'feature_groups.pkl'))
+        mlflow.log_artifact(os.path.join(data_dir, 'scaler.pkl'))
+        
+        # Use pickle serialization to avoid finicky TensorSpecs issues with PyTorch 2.0+
+        mlflow.pytorch.log_model(model, "temporal_moe", serialization_format='pickle')
 
 if __name__ == "__main__":
     train()
