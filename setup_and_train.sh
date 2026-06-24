@@ -15,8 +15,8 @@ pip install --upgrade pip
 echo "==> Installing requirements..."
 pip install -r requirements.txt
 
-echo "==> Moving to v3/src and starting training..."
-cd v3/src
+echo "==> Moving to v4/src and starting training..."
+cd v4/src
 python train.py
 
 echo "==> Training sequence completed successfully!"
