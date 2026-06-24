@@ -241,8 +241,10 @@ def train():
         mlflow.log_artifact(os.path.join(data_dir, 'feature_groups.pkl'))
         mlflow.log_artifact(os.path.join(data_dir, 'scaler.pkl'))
         
-        # Use pickle serialization to avoid finicky TensorSpecs issues with PyTorch 2.0+
-        mlflow.pytorch.log_model(model, "temporal_moe", serialization_format='pickle')
+        # Robustly save the model state_dict and log it as a standard artifact
+        torch.save(model.state_dict(), "temporal_moe.pth")
+        mlflow.log_artifact("temporal_moe.pth")
+
 
 if __name__ == "__main__":
     train()

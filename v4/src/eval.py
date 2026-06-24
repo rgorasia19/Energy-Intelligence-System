@@ -52,20 +52,21 @@ def evaluate():
     print(f"Latest Run ID: {run_id}")
     
     print("--- Downloading Model and Artifacts ---")
-    model_uri = f"runs:/{run_id}/temporal_moe"
-    model = mlflow.pytorch.load_model(model_uri, map_location=torch.device('cpu'))
-    model = getattr(model, '_orig_mod', model)
-    model.eval()
-    
-    # Download artifacts to local tmp dir
     local_dir = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="")
     scaler_path = os.path.join(local_dir, "scaler.pkl")
     feature_groups_path = os.path.join(local_dir, "feature_groups.pkl")
+    model_path = os.path.join(local_dir, "temporal_moe.pth")
     
     target_scaler = joblib.load(scaler_path)
     feature_groups = joblib.load(feature_groups_path)
     raw_cols = feature_groups['raw_cols']
     gate_cols = feature_groups['gate_cols']
+    
+    # Instantiate architecture and load robust state_dict
+    seq_len = 48
+    model = TemporalMoE(raw_feature_dim=len(raw_cols), gate_feature_dim=len(gate_cols), seq_len=seq_len)
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model.eval()
     
     print("--- Loading Test Data ---")
     test_data = pd.read_parquet('../../datalake/moe_tensors/test.parquet')
