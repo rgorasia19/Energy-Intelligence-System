@@ -10,3 +10,5 @@ lz4
 mlflow
 --extra-index-url https://download.pytorch.org/whl/cu121
 torch
+dagshub
+python-dotenv

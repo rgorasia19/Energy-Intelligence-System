@@ -75,8 +75,16 @@ def train():
     
     total_epochs = epochs_linear + epochs_fourier + epochs_attention + epochs_joint
     
-    # MLflow Config (matching test_mlflow.py style)
-    mlflow.set_tracking_uri("sqlite:///../../mlflow.db")
+    # DagsHub Auth & MLflow Config
+    from dotenv import load_dotenv
+    import dagshub
+    
+    load_dotenv()
+    os.environ["MLFLOW_TRACKING_USERNAME"] = "rgorasia19"
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ.get("DAGSHUB_TOKEN", "")
+    
+    dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
+    mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")
     mlflow.set_experiment("v4_moe")
     
     print("Starting MLflow V4 MoE run...")
