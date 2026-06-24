@@ -17,6 +17,8 @@ class MoEDataset(Dataset):
         self.X_raw = torch.tensor(df[raw_cols].values, dtype=torch.float32)
         self.X_gate = torch.tensor(df[gate_cols].values, dtype=torch.float32)
         self.y = torch.tensor(df['TARGET_ND'].values, dtype=torch.float32)
+        self.y_vol = torch.tensor(df['TARGET_VOL'].values, dtype=torch.float32)
+        self.y_trend = torch.tensor(df['TARGET_TREND'].values, dtype=torch.float32)
         self.seq_length = seq_length
         
     def __len__(self):
@@ -26,7 +28,9 @@ class MoEDataset(Dataset):
         return (
             self.X_raw[idx:idx+self.seq_length], 
             self.X_gate[idx:idx+self.seq_length], 
-            self.y[idx+self.seq_length-1]
+            self.y[idx+self.seq_length-1],
+            self.y_vol[idx+self.seq_length-1],
+            self.y_trend[idx+self.seq_length-1]
         )
 
 def evaluate():
@@ -52,22 +56,26 @@ def evaluate():
     print("--- Downloading Model and Artifacts ---")
     local_dir = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="")
     scaler_path = os.path.join(local_dir, "scaler.pkl")
+    aux_scaler_path = os.path.join(local_dir, "aux_scaler.pkl")
     feature_groups_path = os.path.join(local_dir, "feature_groups.pkl")
     model_path = os.path.join(local_dir, "regime_attention.pth")
     
     target_scaler = joblib.load(scaler_path)
+    aux_scaler = joblib.load(aux_scaler_path)
     feature_groups = joblib.load(feature_groups_path)
     raw_cols = feature_groups['raw_cols']
     gate_cols = feature_groups['gate_cols']
     
     seq_len = 48
     num_regimes = 3
+    embed_dim = 32
     model = UnifiedRegimeModel(
         raw_feature_dim=len(raw_cols), 
         gate_feature_dim=len(gate_cols), 
         seq_len=seq_len,
         num_regimes=num_regimes,
-        d_model=64
+        d_model=64,
+        embed_dim=embed_dim
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()
@@ -87,32 +95,42 @@ def evaluate():
     all_weights = []
     all_attention = []
     
+    actual_aux_targets = []
+    pred_aux_targets = []
+    
     print("--- Generating Predictions ---")
     with torch.no_grad():
-        for x_raw, x_gate, y_label in test_loader:
+        for x_raw, x_gate, y_label, y_vol, y_trend in test_loader:
             x_raw, x_gate = x_raw.to(device), x_gate.to(device)
             
             # tau=0.8 at inference based on final annealed value
-            y_hat, p_regime, _, attention_maps = model(x_raw, x_gate, tau=0.8, return_attention=True)
+            y_hat, p_regime, _, aux_preds, attention_maps = model(x_raw, x_gate, tau=0.8, return_attention=True)
             
             test_predictions.append(y_hat.cpu().numpy())
             actual_targets.append(y_label.numpy())
+            
+            # Actual auxiliary targets (scaled)
+            actual_aux_targets.append(torch.stack([y_vol, y_trend], dim=1).numpy())
+            # Predicted auxiliary targets
+            pred_aux_targets.append(aux_preds[:, -1, :].cpu().numpy())
             
             # Take just the last step of the sequence for transition plotting
             all_weights.append(p_regime[:, -1, :].cpu().numpy())
             
             # Take the attention map from the LAST block, for the LAST sequence step
-            # attention_maps is a list of [B, seq_len+1, seq_len+1] tensors across blocks
+            # attention_maps is a list of [B, seq_len, seq_len] tensors across blocks
             if attention_maps:
-                last_block_attn = attention_maps[-1] # (B, seq_len+1, seq_len+1)
-                # We want the attention the LAST sequence token pays to previous tokens
-                last_token_attn = last_block_attn[:, -1, 1:] # (B, seq_len)
+                last_block_attn = attention_maps[-1]
+                last_token_attn = last_block_attn[:, -1, :] # (B, seq_len)
                 all_attention.append(last_token_attn.cpu().numpy())
             
     test_pred_flat = np.concatenate(test_predictions).flatten()
     actual_targets_flat = np.concatenate(actual_targets).flatten()
     all_weights_flat = np.concatenate(all_weights)
     all_attention_flat = np.concatenate(all_attention) if len(all_attention) > 0 else None
+    
+    actual_aux_flat = np.concatenate(actual_aux_targets)
+    pred_aux_flat = np.concatenate(pred_aux_targets)
     
     print("--- Evaluating Metrics ---")
     mae = mean_absolute_error(actual_targets_flat, test_pred_flat)
@@ -131,6 +149,25 @@ def evaluate():
         
     entropies = -np.sum(all_weights_flat * np.log(all_weights_flat + 1e-8), axis=-1)
     print(f"Mean Per-Timestep Entropy: {entropies.mean():.4f}")
+    
+    # Calculate correlation between hard regimes and actual auxiliary features
+    regime_argmax = np.argmax(all_weights_flat, axis=1)
+    
+    # Inverse transform aux targets to raw units for interpretable correlation
+    actual_aux_raw = aux_scaler.inverse_transform(actual_aux_flat)
+    actual_vol_raw = actual_aux_raw[:, 0]
+    actual_trend_raw = actual_aux_raw[:, 1]
+    
+    print("\n--- Regime Profiling (Interpretability) ---")
+    for i in range(num_regimes):
+        mask = (regime_argmax == i)
+        if mask.sum() > 0:
+            mean_vol = actual_vol_raw[mask].mean()
+            mean_trend = actual_trend_raw[mask].mean()
+            print(f"Regime {i}:")
+            print(f"  Mean Volatility: {mean_vol:.4f}")
+            print(f"  Mean Trend: {mean_trend:.4f}")
+    
     print("-------------------\n")
     
     print("--- Generating Plots ---")
@@ -149,8 +186,7 @@ def evaluate():
     # 2. Regime Transitions Plot (Argmax)
     trans_filename = f"eval_regimes_{short_run_id}.png"
     plt.figure(figsize=(12, 3))
-    regime_argmax = np.argmax(all_weights_flat[:2000], axis=1)
-    plt.plot(regime_argmax, label='Regime (Hardened)', color='purple')
+    plt.plot(regime_argmax[:2000], label='Regime (Hardened)', color='purple')
     plt.title('Regime Transitions over Time')
     plt.xlabel('Time Step')
     plt.ylabel('Regime ID')

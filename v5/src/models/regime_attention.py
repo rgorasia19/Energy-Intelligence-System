@@ -68,30 +68,53 @@ class RegimeEncoder(nn.Module):
         return seq_out, attention_maps
 
 class RegimeHead(nn.Module):
-    def __init__(self, d_model=64, num_regimes=3):
+    def __init__(self, d_model=64, num_regimes=3, dropout_prob=0.1, embed_dim=32):
         super().__init__()
+        self.dropout_prob = dropout_prob
         self.mlp = nn.Sequential(
             nn.Linear(d_model, 32),
             nn.GELU(),
             nn.Linear(32, num_regimes)
         )
         
+        # Auxiliary Task: Predict vol and trend (2 outputs) from the regime probabilities
+        self.aux_head = nn.Sequential(
+            nn.Linear(num_regimes, 16),
+            nn.GELU(),
+            nn.Linear(16, 2)
+        )
+        
+        # Regime Embedding Projection
+        self.embed_proj = nn.Linear(num_regimes, embed_dim)
+        
     def forward(self, seq_out, tau=1.0):
         # seq_out: (B, seq_len, d_model)
         logits = self.mlp(seq_out) # (B, seq_len, num_regimes)
         
+        # Regime Dropout (only during training)
+        if self.training and self.dropout_prob > 0.0:
+            mask = (torch.rand_like(logits) > self.dropout_prob).float()
+            # We set dropped logits to a very large negative number so softmax -> 0
+            logits = logits.masked_fill(mask == 0, -1e9)
+        
         # Softmax with temperature
         probs = F.softmax(logits / tau, dim=-1)
         
-        return probs, logits
+        # Predict auxiliary targets from probabilities
+        aux_preds = self.aux_head(probs) # (B, seq_len, 2)
+        
+        # Project probabilities into a continuous embedding vector
+        e_regime = self.embed_proj(probs) # (B, seq_len, embed_dim)
+        
+        return probs, logits, aux_preds, e_regime
 
 class RegimeAttentionModel(nn.Module):
-    def __init__(self, gate_feature_dim, num_regimes=3, d_model=64, n_heads=4, n_layers=2, seq_len=48):
+    def __init__(self, gate_feature_dim, num_regimes=3, d_model=64, n_heads=4, n_layers=2, seq_len=48, embed_dim=32):
         super().__init__()
         self.encoder = RegimeEncoder(gate_feature_dim, d_model, n_heads, n_layers, seq_len)
-        self.head = RegimeHead(d_model, num_regimes)
+        self.head = RegimeHead(d_model, num_regimes, dropout_prob=0.1, embed_dim=embed_dim)
         
     def forward(self, x_gate, tau=1.0, return_attention=False):
         seq_out, attention_maps = self.encoder(x_gate, return_attention)
-        probs, logits = self.head(seq_out, tau)
-        return probs, logits, attention_maps
+        probs, logits, aux_preds, e_regime = self.head(seq_out, tau)
+        return probs, logits, aux_preds, e_regime, attention_maps
