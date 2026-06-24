@@ -71,7 +71,15 @@ def train():
     
     total_epochs = epochs_linear + epochs_fourier + epochs_attention + epochs_joint
     
-    with mlflow.start_run():
+    # MLflow Config (matching test_mlflow.py style)
+    mlflow.set_tracking_uri("sqlite:///../../mlflow.db")
+    mlflow.set_experiment("v4_moe")
+    
+    print("Starting MLflow V4 MoE run...")
+    with mlflow.start_run() as run:
+        run_id = run.info.run_id
+        print(f"Run started: {run_id}")
+        
         mlflow.log_params({
             "epochs_linear": epochs_linear,
             "epochs_fourier": epochs_fourier,
