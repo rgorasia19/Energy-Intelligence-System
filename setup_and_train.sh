@@ -25,8 +25,8 @@ if [[ "$MLFLOW_TRACKING_URI" != *"dagshub.com"* ]]; then
     exit 1
 fi
 
-echo "==> Moving to v4/src and starting training..."
-cd v4/src
+echo "==> Moving to v5/src and starting training..."
+cd v5/src
 python train.py
 
 echo "==> Training sequence completed successfully!"
