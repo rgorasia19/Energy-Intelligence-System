@@ -76,12 +76,10 @@ def train():
     total_epochs = epochs_linear + epochs_fourier + epochs_attention + epochs_joint
     
     # DagsHub Auth & MLflow Config
-    from dotenv import load_dotenv
     import dagshub
     
-    load_dotenv()
     os.environ["MLFLOW_TRACKING_USERNAME"] = "rgorasia19"
-    os.environ["MLFLOW_TRACKING_PASSWORD"] = os.environ.get("DAGSHUB_TOKEN", "")
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = "26b84ad06cab16667533b56a5cebe4ebf27d8f9a"
     
     dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
     mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")

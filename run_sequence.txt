@@ -7,6 +7,6 @@ cd src
 python train.py
 
 #run locally
-scp -i ~/.ssh/id_ed25519 .env p8yyjiyqqogx9l-64411fb6@ssh.runpod.io:/Energy-Intelligence-System/.env
+scp -O -i ~/.ssh/id_ed25519 .env agmruiul5zuk8u-6441117f@ssh.runpod.io:/workspace/Energy-Intelligence-System/.env
 # change the runpod ID        ^here and proxy here^
 when creating a new machine
