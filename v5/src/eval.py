@@ -41,13 +41,13 @@ def evaluate():
     dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
     mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")
     
-    experiment = mlflow.get_experiment_by_name("v5_attention_regime")
+    experiment = mlflow.get_experiment_by_name("v5_attention_regime_2state")
     if experiment is None:
-        raise ValueError("Experiment 'v5_attention_regime' not found.")
+        raise ValueError("Experiment 'v5_attention_regime_2state' not found.")
         
     runs = mlflow.search_runs(experiment_ids=[experiment.experiment_id], order_by=["start_time desc"], max_results=1)
     if runs.empty:
-        raise ValueError("No runs found in experiment 'v5_attention_regime'.")
+        raise ValueError("No runs found in experiment 'v5_attention_regime_2state'.")
         
     run_id = runs.iloc[0].run_id
     short_run_id = run_id[:8]
@@ -67,7 +67,7 @@ def evaluate():
     gate_cols = feature_groups['gate_cols']
     
     seq_len = 48
-    num_regimes = 3
+    num_regimes = 2
     embed_dim = 32
     model = UnifiedRegimeModel(
         raw_feature_dim=len(raw_cols), 

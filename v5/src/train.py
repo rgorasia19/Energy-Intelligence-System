@@ -101,7 +101,7 @@ def train():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=(device=="cuda"))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device=="cuda"))
 
-    num_regimes = 3
+    num_regimes = 2
     embed_dim = 32
     model = UnifiedRegimeModel(
         raw_feature_dim=len(raw_cols), 
@@ -132,7 +132,7 @@ def train():
     
     dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
     mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")
-    mlflow.set_experiment("v5_attention_regime")
+    mlflow.set_experiment("v5_attention_regime_2state")
     
     with mlflow.start_run() as run:
         print(f"Run started: {run.info.run_id}")
