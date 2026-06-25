@@ -45,7 +45,6 @@ def run_ablation_test():
     
     seq_len = 48
     num_regimes = 2
-    embed_dim = 32
     
     # Initialize the model
     model = UnifiedRegimeModel(
@@ -53,8 +52,7 @@ def run_ablation_test():
         gate_feature_dim=len(gate_cols), 
         seq_len=seq_len,
         num_regimes=num_regimes,
-        d_model=64,
-        embed_dim=embed_dim
+        d_model=64
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()
@@ -81,8 +79,8 @@ def run_ablation_test():
             
             # 1. Standard Forward Pass
             # Get regime probabilities and baseline prediction
-            p_regime, logits, aux_preds, e_regime, attention_maps = model.regime_network(x_gate, tau=0.8)
-            y_hat_base = model.predictor(x_raw, e_regime)
+            p_regime, logits, aux_preds, attention_maps = model.regime_network(x_gate, tau=0.8)
+            y_hat_base = model.predictor(x_raw, p_regime)
             
             # 2. Ablated Forward Pass (Zero out Regime 1)
             p_regime_ablated = p_regime.clone()
@@ -92,11 +90,8 @@ def run_ablation_test():
             # Add a small epsilon to prevent division by zero
             p_regime_ablated = p_regime_ablated / (p_regime_ablated.sum(dim=-1, keepdim=True) + 1e-8)
             
-            # Pass the ablated probabilities through the embedding projection
-            e_regime_ablated = model.regime_network.head.embed_proj(p_regime_ablated)
-            
-            # Get ablated predictions
-            y_hat_ablated = model.predictor(x_raw, e_regime_ablated)
+            # Get ablated predictions using the true MoE gating
+            y_hat_ablated = model.predictor(x_raw, p_regime_ablated)
             
             baseline_preds.append(y_hat_base.cpu().numpy())
             ablated_preds.append(y_hat_ablated.cpu().numpy())

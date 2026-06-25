@@ -68,14 +68,12 @@ def evaluate():
     
     seq_len = 48
     num_regimes = 2
-    embed_dim = 32
     model = UnifiedRegimeModel(
         raw_feature_dim=len(raw_cols), 
         gate_feature_dim=len(gate_cols), 
         seq_len=seq_len,
         num_regimes=num_regimes,
-        d_model=64,
-        embed_dim=embed_dim
+        d_model=64
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()

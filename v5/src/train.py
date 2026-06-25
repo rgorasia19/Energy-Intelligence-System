@@ -102,14 +102,12 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device=="cuda"))
 
     num_regimes = 2
-    embed_dim = 32
     model = UnifiedRegimeModel(
         raw_feature_dim=len(raw_cols), 
         gate_feature_dim=len(gate_cols), 
         seq_len=seq_len,
         num_regimes=num_regimes,
-        d_model=64,
-        embed_dim=embed_dim
+        d_model=64
     ).to(device)
 
     # L2 weight decay added to AdamW
@@ -122,8 +120,8 @@ def train():
     epochs = 40
     
     # Loss weights
-    lambda1 = 0.1 # Entropy
-    lambda2 = 1.0 # Load balancing
+    # lambda1 will be dynamically scheduled
+    lambda2 = 10.0 # Extreme Load balancing
     lambda3 = 0.5 # Smoothness
     
     # DagsHub Auth
@@ -142,7 +140,6 @@ def train():
             "batch_size": batch_size,
             "seq_len": seq_len,
             "num_regimes": num_regimes,
-            "lambda1_entropy": lambda1,
             "lambda2_balance": lambda2,
             "lambda3_smooth": lambda3
         })
@@ -151,9 +148,12 @@ def train():
             model.train()
             train_loss = 0.0
             
-            # Temperature Annealing: 2.5 -> 0.8
+            # Temperature Annealing: 5.0 -> 1.0
             progress = epoch / max(1, epochs - 1)
-            tau = 2.5 - progress * (2.5 - 0.8)
+            tau = 5.0 - progress * (5.0 - 1.0)
+            
+            # Entropy Early Decay: 1.0 -> 0.0 by epoch 20
+            lambda1 = max(0.0, 1.0 - (epoch / 20.0))
             
             for x_raw, x_gate, y, y_vol, y_trend in train_loader:
                 x_raw, x_gate, y = x_raw.to(device), x_gate.to(device), y.to(device)
@@ -231,8 +231,9 @@ def train():
             mlflow.log_metric("val_loss_aux", val_aux_loss, step=epoch)
             mlflow.log_metric("val_entropy", val_entropy_raw, step=epoch)
             mlflow.log_metric("tau", tau, step=epoch)
+            mlflow.log_metric("lambda1_entropy", lambda1, step=epoch)
             
-            print(f"Epoch {epoch+1}/{epochs} - Tau: {tau:.2f} - Train Loss: {train_loss:.4f} - Val Loss Total: {val_loss:.4f}")
+            print(f"Epoch {epoch+1}/{epochs} - Tau: {tau:.2f} - L1: {lambda1:.2f} - Train Loss: {train_loss:.4f} - Val Loss Total: {val_loss:.4f}")
             print(f"  --> Occupancy: {[f'{x*100:.1f}%' for x in occupancy]}")
             
             early_stopping(val_loss)
