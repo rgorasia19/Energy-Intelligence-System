@@ -16,7 +16,7 @@ class TimeSeriesDataset(Dataset):
     def __init__(self, df, raw_cols, gate_cols, seq_length=48):
         self.X_raw = torch.tensor(df[raw_cols].values, dtype=torch.float32)
         self.X_gate = torch.tensor(df[gate_cols].values, dtype=torch.float32)
-        self.y = torch.tensor(df['TARGET_ND'].values, dtype=torch.float32)
+        self.y_diff = torch.tensor(df['TARGET_ND_DIFF'].values, dtype=torch.float32)
         self.y_vol = torch.tensor(df['TARGET_VOL'].values, dtype=torch.float32)
         self.y_trend = torch.tensor(df['TARGET_TREND'].values, dtype=torch.float32)
         self.seq_length = seq_length
@@ -28,7 +28,7 @@ class TimeSeriesDataset(Dataset):
         return (
             self.X_raw[idx:idx+self.seq_length], 
             self.X_gate[idx:idx+self.seq_length], 
-            self.y[idx+self.seq_length-1],
+            self.y_diff[idx+self.seq_length-1],
             self.y_vol[idx+self.seq_length-1],
             self.y_trend[idx+self.seq_length-1]
         )

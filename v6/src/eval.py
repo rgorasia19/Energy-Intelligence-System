@@ -23,7 +23,9 @@ class TimeSeriesDataset(Dataset):
     def __init__(self, df, raw_cols, gate_cols, seq_length=48):
         self.X_raw = torch.tensor(df[raw_cols].values, dtype=torch.float32)
         self.X_gate = torch.tensor(df[gate_cols].values, dtype=torch.float32)
-        self.y = torch.tensor(df['TARGET_ND'].values, dtype=torch.float32)
+        self.y_diff = torch.tensor(df['TARGET_ND_DIFF'].values, dtype=torch.float32)
+        self.y_abs = torch.tensor(df['TARGET_ND'].values, dtype=torch.float32)
+        self.nd_current = torch.tensor(df['ND_CURRENT'].values, dtype=torch.float32)
         self.y_vol = torch.tensor(df['TARGET_VOL'].values, dtype=torch.float32)
         self.y_trend = torch.tensor(df['TARGET_TREND'].values, dtype=torch.float32)
         self.seq_length = seq_length
@@ -35,7 +37,9 @@ class TimeSeriesDataset(Dataset):
         return (
             self.X_raw[idx:idx+self.seq_length], 
             self.X_gate[idx:idx+self.seq_length], 
-            self.y[idx+self.seq_length-1],
+            self.y_diff[idx+self.seq_length-1],
+            self.y_abs[idx+self.seq_length-1],
+            self.nd_current[idx+self.seq_length-1],
             self.y_vol[idx+self.seq_length-1],
             self.y_trend[idx+self.seq_length-1]
         )
@@ -105,13 +109,16 @@ def evaluate():
     
     print("--- Generating Predictions ---")
     with torch.no_grad():
-        for x_raw, x_gate, y_label, y_vol, y_trend in test_loader:
+        for x_raw, x_gate, y_diff, y_abs, nd_current, y_vol, y_trend in test_loader:
             x_raw, x_gate = x_raw.to(device), x_gate.to(device)
             
-            y_hat, z_seq, aux_preds = model(x_raw, x_gate)
+            y_diff_hat, z_seq, aux_preds = model(x_raw, x_gate)
             
-            test_predictions.append(y_hat.cpu().numpy())
-            actual_targets.append(y_label.numpy())
+            # Reconstruct absolute prediction: ND[t+1] = ND[t] + predicted_diff
+            y_hat_abs = nd_current.to(device) + y_diff_hat
+            
+            test_predictions.append(y_hat_abs.cpu().numpy())
+            actual_targets.append(y_abs.numpy())
             
             actual_aux_targets.append(torch.stack([y_vol, y_trend], dim=1).numpy())
             pred_aux_targets.append(aux_preds[:, -1, :].cpu().numpy())
