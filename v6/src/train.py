@@ -107,7 +107,7 @@ def train():
     criterion = nn.SmoothL1Loss()
     aux_criterion = nn.MSELoss()
     
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
     
     epochs = 40
