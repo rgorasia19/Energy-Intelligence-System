@@ -15,10 +15,10 @@ class HybridDecoder(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.GELU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.3),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.GELU(),
-            nn.Dropout(0.1),
+            nn.Dropout(0.3),
             nn.Linear(hidden_dim // 2, 1)
         )
         

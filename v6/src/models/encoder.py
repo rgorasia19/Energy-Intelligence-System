@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class MultiHeadAttentionBlock(nn.Module):
-    def __init__(self, d_model, n_heads, dropout=0.1):
+    def __init__(self, d_model, n_heads, dropout=0.2):
         super().__init__()
         self.attention = nn.MultiheadAttention(embed_dim=d_model, num_heads=n_heads, dropout=dropout, batch_first=True)
         self.norm1 = nn.LayerNorm(d_model)

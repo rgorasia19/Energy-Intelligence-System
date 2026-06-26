@@ -102,18 +102,19 @@ def train():
         latent_dim=latent_dim
     ).to(device)
 
-    # L2 weight decay added to AdamW
-    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
+    # L2 weight decay added to AdamW - Increased for stronger regularization
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
     criterion = nn.SmoothL1Loss()
     aux_criterion = nn.MSELoss()
     
-    early_stopping = EarlyStopping(patience=5, min_delta=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
+    early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
     
     epochs = 40
     
     # Loss weights for Continuous Regularization
     lambda_smooth = 0.1 # Weight for ||z_t - z_{t-1}||^2
-    lambda_ib = 1e-3    # Weight for ||z_t||^2
+    lambda_ib = 1e-2    # Increased weight for ||z_t||^2 (regularization)
     
     # DagsHub Auth
     os.environ["MLFLOW_TRACKING_USERNAME"] = "rgorasia19"
@@ -211,6 +212,7 @@ def train():
             
             print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss Total: {val_loss:.4f}")
             
+            scheduler.step(val_loss)
             early_stopping(val_loss)
             if early_stopping.early_stop:
                 print("Early stopping triggered. Stopping training.")
