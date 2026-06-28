@@ -25,18 +25,13 @@ if [[ "$MLFLOW_TRACKING_URI" != *"dagshub.com"* ]]; then
     exit 1
 fi
 
-echo "creating features"
-cd v6/src
-python feature_prep.py
+cd v7/src
 
-echo "==> Moving to v6/src and starting training..."
+echo "starting training..."
 python train.py
 
 echo "Training sequence completed successfully!"
 echo "performing evaluation..."
 python eval.py
-
-echo "performing diagnostics..."
-python diagnostics.py
 
 echo "All tasks completed successfully!"
