@@ -1,4 +1,9 @@
 import os
+import sys
+
+if sys.platform == 'win32' and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
