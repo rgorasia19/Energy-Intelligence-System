@@ -3,13 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class InterpretableMultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads, dropout=0.1):
+    def __init__(self, d_model, num_heads, dropout=0.1, temperature=2.0):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_head = d_model // num_heads
+        self.temperature = temperature
         
         self.q_proj = nn.Linear(d_model, d_model)
         self.k_proj = nn.Linear(d_model, d_model)
@@ -43,7 +44,7 @@ class InterpretableMultiHeadAttention(nn.Module):
         # Let's implement that:
         
         # 1. Attention scores per head: (batch, num_heads, q_len, k_len)
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / (self.d_head ** 0.5)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / ((self.d_head ** 0.5) * self.temperature)
         
         if mask is not None:
             # Mask is typically (batch, 1, q_len, k_len) or (q_len, k_len)

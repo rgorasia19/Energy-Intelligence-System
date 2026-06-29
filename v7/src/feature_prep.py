@@ -50,24 +50,26 @@ def create_features(df):
     df_feat['obs_ND_fft_daily'] = compute_rolling_fft_mag(df['ND'], window=48, freq_idx=1)
     df_feat['obs_ND_fft_12h'] = compute_rolling_fft_mag(df['ND'], window=48, freq_idx=2)
     
-    # Known future (we will add 'known_' prefix)
-    hour_sin = np.sin(2 * np.pi * df.index.hour / 24.0)
-    hour_cos = np.cos(2 * np.pi * df.index.hour / 24.0)
-    dow_sin = np.sin(2 * np.pi * df.index.dayofweek / 7.0)
-    dow_cos = np.cos(2 * np.pi * df.index.dayofweek / 7.0)
-    
-    df_feat['known_cal_hour_sin'] = hour_sin
-    df_feat['known_cal_hour_cos'] = hour_cos
-    df_feat['known_cal_dow_sin'] = dow_sin
-    df_feat['known_cal_dow_cos'] = dow_cos
+    # Known future (we will add 'known_' prefix) with Fourier Features
+    # Daily Fourier (k=1..4)
+    for k in range(1, 5):
+        df_feat[f'known_cal_hour_sin_{k}'] = np.sin(2 * np.pi * k * df.index.hour / 24.0)
+        df_feat[f'known_cal_hour_cos_{k}'] = np.cos(2 * np.pi * k * df.index.hour / 24.0)
+    # Weekly Fourier (k=1..3)
+    for k in range(1, 4):
+        df_feat[f'known_cal_dow_sin_{k}'] = np.sin(2 * np.pi * k * df.index.dayofweek / 7.0)
+        df_feat[f'known_cal_dow_cos_{k}'] = np.cos(2 * np.pi * k * df.index.dayofweek / 7.0)
     
     # Static (we will add 'static_' prefix)
     df_feat['static_dummy'] = 1.0
     
     # Targets (UNSHIFTED - the Dataset will slice [t : t+H] from these)
-    df_feat['TARGET_ND'] = df['ND']
+    df_feat['TARGET_ND_DIFF'] = df['ND'].diff(1)
     df_feat['TARGET_VOL'] = df['ND'].rolling(48).std()
     df_feat['TARGET_TREND'] = df['ND'].pct_change(48)
+    
+    # Keep track of absolute current value for reconstruction in eval
+    df_feat['ND_CURRENT'] = df['ND']
     
     # Drop NaNs created by rolling and diff
     df_feat.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -87,7 +89,7 @@ def train_val_test_split(df, train_ratio=0.7, val_ratio=0.15):
     return train_df, val_df, test_df
 
 def normalize_data(train_df, val_df, test_df, scaler_path):
-    target_cols = ['TARGET_ND', 'TARGET_VOL', 'TARGET_TREND']
+    target_cols = ['TARGET_ND_DIFF', 'TARGET_VOL', 'TARGET_TREND', 'ND_CURRENT']
     feature_cols = [c for c in train_df.columns if c not in target_cols and not c.startswith('static_')]
     
     scaler = StandardScaler()
