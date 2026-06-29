@@ -12,3 +12,4 @@ mlflow
 torch
 dagshub
 python-dotenv
+statsmodels
