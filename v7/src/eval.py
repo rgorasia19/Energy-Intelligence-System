@@ -8,11 +8,13 @@ import torch
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import joblib
 import dagshub
 import mlflow
 import mlflow.pytorch
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from statsmodels.graphics.tsaplots import plot_acf
 from torch.utils.data import DataLoader
 
 from models.tft import TemporalFusionTransformer
@@ -82,16 +84,18 @@ def evaluate():
     
     test_predictions_nd = []
     actual_targets_nd = []
+    all_attn_weights = []
     
     print("--- Generating Predictions ---")
     with torch.no_grad():
         for static, past, known, y_nd, y_vol, y_trend in test_loader:
             static, past, known = static.to(device), past.to(device), known.to(device)
             
-            pred_nd, pred_vol, pred_trend = model(static, past, known)
+            pred_nd, pred_vol, pred_trend, attn_weights = model(static, past, known)
             
             test_predictions_nd.append(pred_nd.cpu().numpy())
             actual_targets_nd.append(y_nd.numpy())
+            all_attn_weights.append(attn_weights.cpu().numpy())
             
     # Each batch returns (batch_size, horizon)
     pred_nd_arr = np.concatenate(test_predictions_nd, axis=0)
@@ -148,6 +152,46 @@ def evaluate():
     plt.ylabel('Demand (Scaled)')
     plt.legend()
     plt.savefig(plot_multi_filename, dpi=600)
+    plt.close()
+        
+    # 3. Horizon-Wide Degradation
+    mae_per_step = []
+    for h in range(horizon):
+        mae_h = mean_absolute_error(actual_nd_arr[:, h], pred_nd_arr[:, h])
+        mae_per_step.append(mae_h)
+        
+    plot_degrad_filename = f"eval_degradation_v7_{short_run_id}.png"
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, horizon + 1), mae_per_step, marker='o', color='purple')
+    plt.title(f'Horizon-Wide MAE Degradation (v7 TFT) - Run: {short_run_id}')
+    plt.xlabel('Horizon Step')
+    plt.ylabel('Mean Absolute Error (Scaled)')
+    plt.grid(True)
+    plt.savefig(plot_degrad_filename, dpi=600)
+    plt.close()
+
+    # 4. Attention Weight Heatmap
+    # all_attn_weights is a list of arrays of shape (batch, q_len, k_len)
+    attn_arr = np.concatenate(all_attn_weights, axis=0)
+    # Average across all test samples
+    avg_attn = np.mean(attn_arr, axis=0) # (q_len, k_len)
+    
+    plot_attn_filename = f"eval_attention_heatmap_v7_{short_run_id}.png"
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(avg_attn, cmap="viridis")
+    plt.title(f'Average Temporal Attention Weights (v7 TFT)')
+    plt.xlabel('Key (Attended Past/Future Sequence)')
+    plt.ylabel('Query (Target Sequence)')
+    plt.savefig(plot_attn_filename, dpi=600)
+    plt.close()
+    
+    # 5. Residual Autocorrelation (ACF) on 1-Step Ahead
+    residuals_1step = actual_1step - pred_1step
+    plot_acf_filename = f"eval_residual_acf_v7_{short_run_id}.png"
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plot_acf(residuals_1step, lags=100, ax=ax, title="Autocorrelation of 1-Step Ahead Residuals")
+    plt.savefig(plot_acf_filename, dpi=600)
     plt.close()
         
     print(f"Saved plots to current directory.")

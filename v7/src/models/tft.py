@@ -125,7 +125,7 @@ class TemporalFusionTransformer(nn.Module):
         # Attention
         # Provide causal mask or just standard mask for TFT
         # In TFT, the decoder can attend to all past steps
-        attn_out, _ = self.attention(q=enriched, k=enriched, v=enriched)
+        attn_out, attn_weights = self.attention(q=enriched, k=enriched, v=enriched)
         
         attn_gated = self.post_attn_gate(attn_out)
         attn_res = self.post_attn_norm(attn_gated + lstm_res)
@@ -142,4 +142,4 @@ class TemporalFusionTransformer(nn.Module):
         pred_vol = self.out_vol(future_final).squeeze(-1)
         pred_trend = self.out_trend(future_final).squeeze(-1)
         
-        return pred_nd, pred_vol, pred_trend
+        return pred_nd, pred_vol, pred_trend, attn_weights

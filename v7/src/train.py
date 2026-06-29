@@ -153,7 +153,7 @@ def train():
                 
                 optimizer.zero_grad(set_to_none=True)
                 
-                pred_nd, pred_vol, pred_trend = model(static, past, known)
+                pred_nd, pred_vol, pred_trend, _ = model(static, past, known)
                 
                 # Joint loss over H steps for all targets
                 loss_nd = criterion(pred_nd, y_nd)
@@ -184,7 +184,7 @@ def train():
                     y_vol = y_vol.to(device)
                     y_trend = y_trend.to(device)
                     
-                    pred_nd, pred_vol, pred_trend = model(static, past, known)
+                    pred_nd, pred_vol, pred_trend, _ = model(static, past, known)
                     
                     loss_nd = criterion(pred_nd, y_nd)
                     loss_vol = criterion(pred_vol, y_vol)
