@@ -41,9 +41,9 @@ def evaluate():
     print("--- Downloading Model and Artifacts ---")
     # For v7, train.py logs the artifact directly as 'tft_v7.pth'
     local_dir = mlflow.artifacts.download_artifacts(run_id=run_id, artifact_path="")
-    scaler_path = os.path.join(local_dir, "scaler.pkl")
-    target_scaler_path = os.path.join(local_dir, "target_scaler.pkl")
-    feature_groups_path = os.path.join(local_dir, "feature_groups.pkl")
+    scaler_path = "../../datalake/v7_tensors/scaler.pkl"
+    target_scaler_path = "../../datalake/v7_tensors/target_scaler.pkl"
+    feature_groups_path = "../../datalake/v7_tensors/feature_groups.pkl"
     model_path = os.path.join(local_dir, "tft_v7.pth")
     
     target_scaler = joblib.load(target_scaler_path)

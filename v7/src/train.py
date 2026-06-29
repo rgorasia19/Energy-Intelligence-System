@@ -212,11 +212,14 @@ def train():
                 print("Early stopping triggered")
                 break
                 
-        # Save model
+        # Save model and artifacts
         os.makedirs('saved_models', exist_ok=True)
         model_path = "saved_models/tft_v7.pth"
         torch.save(model.state_dict(), model_path)
         mlflow.log_artifact(model_path)
+        mlflow.log_artifact(os.path.join(data_dir, 'scaler.pkl'))
+        mlflow.log_artifact(os.path.join(data_dir, 'target_scaler.pkl'))
+        mlflow.log_artifact(os.path.join(data_dir, 'feature_groups.pkl'))
         print("Training complete and model saved.")
 
 if __name__ == "__main__":
