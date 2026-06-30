@@ -40,6 +40,12 @@ def create_features(df):
         df_feat[f'obs_{c}'] = df[c]
         df_feat[f'obs_{c}_diff1'] = df[c].diff(1)
         df_feat[f'obs_{c}_diff2'] = df[c].diff(2)
+        df_feat[f'obs_{c}_diff3'] = df[c].diff(3)
+        df_feat[f'obs_{c}_diff4'] = df[c].diff(4)
+        
+    # Explicit short-term lags for ND
+    for lag in range(1, 5):
+        df_feat[f'obs_ND_lag_{lag}'] = df['ND'].shift(lag)
         
     df_feat['obs_ND_vol_12'] = df['ND'].rolling(12).std()
     df_feat['obs_ND_vol_48'] = df['ND'].rolling(48).std()
