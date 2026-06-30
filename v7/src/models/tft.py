@@ -14,9 +14,14 @@ class TemporalFusionTransformer(nn.Module):
         seq_len=48,
         horizon=48,
         dropout=0.2,
-        known_dropout=0.5
+        known_dropout=0.5,
+        target_in_past_idx=None
     ):
         super().__init__()
+        
+        self.target_in_past_idx = target_in_past_idx
+        if self.target_in_past_idx is not None:
+            self.ar_head = nn.Linear(seq_len, horizon)
         
         self.d_model = d_model
         self.seq_len = seq_len
@@ -140,6 +145,13 @@ class TemporalFusionTransformer(nn.Module):
         future_final = final_out[:, self.seq_len:, :] # (batch, horizon, d_model)
         
         pred_nd = self.out_nd(future_final).squeeze(-1) # (batch, horizon)
+        
+        # Residual AR Head
+        if hasattr(self, 'ar_head') and self.target_in_past_idx is not None:
+            past_target = past_feat[:, :, self.target_in_past_idx] # (batch, seq_len)
+            ar_pred = self.ar_head(past_target) # (batch, horizon)
+            pred_nd = pred_nd + ar_pred
+            
         pred_vol = self.out_vol(future_final).squeeze(-1)
         pred_trend = self.out_trend(future_final).squeeze(-1)
         
