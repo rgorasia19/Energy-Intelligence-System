@@ -13,7 +13,8 @@ class TemporalFusionTransformer(nn.Module):
         num_heads=4,
         seq_len=48,
         horizon=48,
-        dropout=0.2
+        dropout=0.2,
+        known_dropout=0.5
     ):
         super().__init__()
         
@@ -30,7 +31,7 @@ class TemporalFusionTransformer(nn.Module):
         self.static_vsn = VSN(num_static_vars, d_model, dropout=dropout)
         # For past, we consider both past_vars and future_vars (which are available in the past)
         self.past_vsn = VSN(num_past_vars + num_future_vars, d_model, context_size=d_model, dropout=dropout)
-        self.future_vsn = VSN(num_future_vars, d_model, context_size=d_model, dropout=dropout)
+        self.future_vsn = VSN(num_future_vars, d_model, context_size=d_model, dropout=known_dropout)
         
         # Static Context Encoders
         self.static_context_grn_cs = GRN(d_model, d_model, d_model, dropout=dropout)
