@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class InterpretableMultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads, dropout=0.1, temperature=2.0):
+    def __init__(self, d_model, num_heads, dropout=0.3, temperature=2.0):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         

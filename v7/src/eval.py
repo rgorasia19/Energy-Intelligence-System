@@ -140,9 +140,11 @@ def evaluate():
     print(f"R2 (1-Step): {r2_1step:.4f}")
     
     print("\n--- Generating Plots ---")
+    plot_dir = "../plots/run5"
+    os.makedirs(plot_dir, exist_ok=True)
     
     # 1. 1-Step Ahead Prediction Plot
-    plot_filename = f"eval_pred_1step_v7_{short_run_id}.png"
+    plot_filename = os.path.join(plot_dir, f"eval_pred_1step_v7_{short_run_id}.png")
     plt.figure(figsize=(12, 6))
     plt.plot(actual_1step[:2000], label='Actual Demand (1-step)', color='blue', alpha=0.5)
     plt.plot(pred_1step[:2000], label='Predicted Demand (1-step)', color='red', alpha=0.5)
@@ -155,7 +157,7 @@ def evaluate():
     
     # 2. Multi-Step Horizon Plot for a specific sample
     sample_idx = 1000 # arbitrary sample
-    plot_multi_filename = f"eval_pred_multistep_v7_{short_run_id}.png"
+    plot_multi_filename = os.path.join(plot_dir, f"eval_pred_multistep_v7_{short_run_id}.png")
     plt.figure(figsize=(12, 6))
     plt.plot(actual_nd_arr[sample_idx, :], label='Actual Sequence', color='blue', marker='o')
     plt.plot(pred_nd_arr[sample_idx, :], label='Predicted Sequence', color='red', marker='x')
@@ -172,7 +174,7 @@ def evaluate():
         mae_h = mean_absolute_error(actual_nd_arr[:, h], pred_nd_arr[:, h])
         mae_per_step.append(mae_h)
         
-    plot_degrad_filename = f"eval_degradation_v7_{short_run_id}.png"
+    plot_degrad_filename = os.path.join(plot_dir, f"eval_degradation_v7_{short_run_id}.png")
     plt.figure(figsize=(10, 5))
     plt.plot(range(1, horizon + 1), mae_per_step, marker='o', color='purple')
     plt.title(f'Horizon-Wide MAE Degradation (v7 TFT) - Run: {short_run_id}')
@@ -188,7 +190,7 @@ def evaluate():
     # Average across all test samples
     avg_attn = np.mean(attn_arr, axis=0) # (q_len, k_len)
     
-    plot_attn_filename = f"eval_attention_heatmap_v7_{short_run_id}.png"
+    plot_attn_filename = os.path.join(plot_dir, f"eval_attention_heatmap_v7_{short_run_id}.png")
     plt.figure(figsize=(12, 10))
     sns.heatmap(avg_attn, cmap="viridis")
     plt.title(f'Average Temporal Attention Weights (v7 TFT)')
@@ -199,7 +201,7 @@ def evaluate():
     
     # 5. Residual Autocorrelation (ACF) on 1-Step Ahead
     residuals_1step = actual_1step - pred_1step
-    plot_acf_filename = f"eval_residual_acf_v7_{short_run_id}.png"
+    plot_acf_filename = os.path.join(plot_dir, f"eval_residual_acf_v7_{short_run_id}.png")
     
     fig, ax = plt.subplots(figsize=(12, 6))
     plot_acf(residuals_1step, lags=100, ax=ax, title="Autocorrelation of 1-Step Ahead Residuals")

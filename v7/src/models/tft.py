@@ -13,7 +13,7 @@ class TemporalFusionTransformer(nn.Module):
         num_heads=4,
         seq_len=48,
         horizon=48,
-        dropout=0.1
+        dropout=0.2
     ):
         super().__init__()
         
