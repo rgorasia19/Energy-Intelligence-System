@@ -59,6 +59,10 @@ def evaluate():
     d_model = 64
     num_heads = 4
     
+    target_idx = None
+    if 'obs_ND_diff1' in obs_cols:
+        target_idx = obs_cols.index('obs_ND_diff1') if isinstance(obs_cols, list) else obs_cols.tolist().index('obs_ND_diff1')
+
     model = TemporalFusionTransformer(
         num_static_vars=len(static_cols),
         num_future_vars=len(known_cols),
@@ -67,6 +71,7 @@ def evaluate():
         num_heads=num_heads,
         seq_len=seq_len,
         horizon=horizon,
+        target_in_past_idx=target_idx,
         dropout=0.1
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
