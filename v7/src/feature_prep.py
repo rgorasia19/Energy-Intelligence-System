@@ -4,7 +4,7 @@ import pandas as pd
 import joblib
 from sklearn.preprocessing import StandardScaler
 
-def load_data(pca_path, raw_path):
+def load_data(pca_path, raw_path, weather_path):
     # Load PCA data
     df_pca = pd.read_parquet(pca_path)
     df_pca.index = pd.to_datetime(df_pca.index)
@@ -14,12 +14,17 @@ def load_data(pca_path, raw_path):
     df_raw['DATETIME'] = pd.to_datetime(df_raw['DATETIME'])
     df_raw.set_index('DATETIME', inplace=True)
     
+    # Load weather data
+    df_weather = pd.read_csv(weather_path)
+    df_weather['DATETIME'] = pd.to_datetime(df_weather['DATETIME'])
+    df_weather.set_index('DATETIME', inplace=True)
+    
     # Merge
     demand_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
     available_cols = [c for c in demand_cols if c in df_raw.columns]
     df_demand = df_raw[available_cols]
     
-    df = df_pca.join(df_demand, how='inner')
+    df = df_pca.join(df_demand, how='inner').join(df_weather, how='inner')
     df.sort_index(inplace=True)
     
     return df, available_cols
@@ -36,19 +41,10 @@ def create_features(df):
     base_cols = ['ND', 'INTER_PC0', 'GEN_PC0', 'CAP_PC0']
     
     # Observed past (we will add 'obs_' prefix)
+    # STRIPPED: We only keep the raw signals. We remove all diffs, volatilities, and FFTs
+    # so the TFT can learn these features natively.
     for c in base_cols:
         df_feat[f'obs_{c}'] = df[c]
-        df_feat[f'obs_{c}_diff1'] = df[c].diff(1)
-        df_feat[f'obs_{c}_diff2'] = df[c].diff(2)
-        
-    df_feat['obs_ND_vol_12'] = df['ND'].rolling(12).std()
-    df_feat['obs_ND_vol_48'] = df['ND'].rolling(48).std()
-    df_feat['obs_ND_ret_12'] = df['ND'].pct_change(12)
-    df_feat['obs_ND_ret_48'] = df['ND'].pct_change(48)
-    
-    # Spectral (observed only)
-    df_feat['obs_ND_fft_daily'] = compute_rolling_fft_mag(df['ND'], window=48, freq_idx=1)
-    df_feat['obs_ND_fft_12h'] = compute_rolling_fft_mag(df['ND'], window=48, freq_idx=2)
     
     # Known future (we will add 'known_' prefix) with Fourier Features
     # Daily Fourier (k=1..4)
@@ -59,6 +55,12 @@ def create_features(df):
     for k in range(1, 4):
         df_feat[f'known_cal_dow_sin_{k}'] = np.sin(2 * np.pi * k * df.index.dayofweek / 7.0)
         df_feat[f'known_cal_dow_cos_{k}'] = np.cos(2 * np.pi * k * df.index.dayofweek / 7.0)
+        
+    # Weather Forecasts (using actuals as a proxy for perfectly accurate forecasts)
+    weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
+    for wc in weather_cols:
+        if wc in df.columns:
+            df_feat[f'known_{wc}'] = df[wc]
     
     # Static (we will add 'static_' prefix)
     df_feat['static_dummy'] = 1.0
@@ -116,12 +118,13 @@ def normalize_data(train_df, val_df, test_df, scaler_path):
 def main():
     pca_path = '../../datalake/pca/df_pca.parquet'
     raw_path = '../../datalake/raw_data/full_data.csv'
+    weather_path = '../../datalake/raw_data/weather_data.csv'
     out_dir = '../../datalake/v7_tensors/'
     
     os.makedirs(out_dir, exist_ok=True)
     
     print("1. Loading data...")
-    df, _ = load_data(pca_path, raw_path)
+    df, _ = load_data(pca_path, raw_path, weather_path)
     
     print("2. Creating features...")
     df = create_features(df)
