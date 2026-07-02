@@ -56,7 +56,7 @@ def evaluate():
     
     seq_len = 48
     horizon = 48
-    d_model = 64
+    d_model = 32
     num_heads = 4
     
     target_idx = None
@@ -72,7 +72,7 @@ def evaluate():
         seq_len=seq_len,
         horizon=horizon,
         target_in_past_idx=target_idx,
-        dropout=0.1
+        dropout=0.3
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     model.eval()

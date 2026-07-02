@@ -96,7 +96,7 @@ def train():
     seq_len = 48
     horizon = 48
     batch_size = 512
-    d_model = 64
+    d_model = 32
     num_heads = 4
 
     train_dataset = TFTDataset(train_data, obs_cols, known_cols, static_cols, seq_length=seq_len, horizon=horizon)
@@ -119,10 +119,10 @@ def train():
         seq_len=seq_len,
         horizon=horizon,
         target_in_past_idx=target_idx,
-        dropout=0.1
+        dropout=0.3
     ).to(device)
 
-    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-3)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
     criterion = nn.SmoothL1Loss()
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
