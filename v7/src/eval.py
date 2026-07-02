@@ -90,6 +90,7 @@ def evaluate():
     test_predictions_nd = []
     actual_targets_nd = []
     all_attn_weights = []
+    nd_currents = []
     
     print("--- Generating Predictions ---")
     with torch.no_grad():
@@ -113,10 +114,12 @@ def evaluate():
             test_predictions_nd.append(pred_nd_abs)
             actual_targets_nd.append(actual_nd_abs)
             all_attn_weights.append(attn_weights.cpu().numpy())
+            nd_currents.append(nd_curr_np)
             
     # Each batch returns (batch_size, horizon)
     pred_nd_arr = np.concatenate(test_predictions_nd, axis=0)
     actual_nd_arr = np.concatenate(actual_targets_nd, axis=0)
+    nd_curr_arr = np.concatenate(nd_currents, axis=0)
     
     # We want to evaluate the overall multi-step performance, so we can flatten and compare
     test_pred_flat = pred_nd_arr.flatten()
@@ -202,15 +205,53 @@ def evaluate():
     plt.savefig(plot_attn_filename, dpi=600)
     plt.close()
     
-    # 5. Residual Autocorrelation (ACF) on 1-Step Ahead
-    residuals_1step = actual_1step - pred_1step
-    plot_acf_filename = f"eval_residual_acf_v7_{short_run_id}.png"
+    # 5. Residual Autocorrelation (ACF) Across the Horizon
+    # Compute how errors compound along the 48-step horizon for fixed forecast origins.
+    from statsmodels.tsa.stattools import acf
+    residuals_multistep = actual_nd_arr - pred_nd_arr
+    N_samples = residuals_multistep.shape[0]
     
-    fig, ax = plt.subplots(figsize=(12, 6))
-    plot_acf(residuals_1step, lags=100, ax=ax, title="Autocorrelation of 1-Step Ahead Residuals")
+    mean_acf = np.zeros(horizon)
+    for i in range(N_samples):
+        # Compute ACF for each sample's horizon-wide residuals
+        sample_acf = acf(residuals_multistep[i, :], nlags=horizon-1, fft=True)
+        mean_acf += sample_acf
+    mean_acf /= N_samples
+    
+    plot_acf_filename = f"eval_residual_acf_horizon_v7_{short_run_id}.png"
+    plt.figure(figsize=(10, 5))
+    plt.bar(range(horizon), mean_acf, color='blue', alpha=0.7)
+    plt.axhline(0, color='black', linewidth=1)
+    plt.title(f'Average Residual Autocorrelation Across Horizon (v7) - Run: {short_run_id}')
+    plt.xlabel('Lag (Horizon Steps)')
+    plt.ylabel('Mean Autocorrelation')
+    plt.grid(True, alpha=0.3)
     plt.savefig(plot_acf_filename, dpi=600)
     plt.close()
+    
+    # 6. Horizon-wide skill score
+    # Baseline: daily naive forecast predicting the value from S=48 steps ago
+    test_data_nd = test_data['ND_CURRENT'].values
+    
+    daily_naive_arr = np.array([test_data_nd[i : i + horizon] for i in range(N_samples)])
+    
+    mae_baseline_per_step = []
+    for h in range(horizon):
+        mae_base_h = mean_absolute_error(actual_nd_arr[:, h], daily_naive_arr[:, h])
+        mae_baseline_per_step.append(mae_base_h)
         
+    skill_per_step = [1 - (mae_per_step[h] / mae_baseline_per_step[h]) for h in range(horizon)]
+    
+    plot_skill_filename = f"eval_skill_v7_{short_run_id}.png"
+    plt.figure(figsize=(10, 5))
+    plt.plot(range(1, horizon + 1), skill_per_step, marker='s', color='green')
+    plt.title(f'Horizon-Wide Skill Score vs Daily Naive (v7) - Run: {short_run_id}')
+    plt.xlabel('Horizon Step')
+    plt.ylabel('Skill Score (1 - MAE_model / MAE_daily_naive)')
+    plt.grid(True)
+    plt.savefig(plot_skill_filename, dpi=600)
+    plt.close()
+
     print(f"Saved plots to current directory.")
 
 if __name__ == "__main__":
