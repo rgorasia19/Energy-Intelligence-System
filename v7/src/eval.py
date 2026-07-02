@@ -60,8 +60,8 @@ def evaluate():
     num_heads = 4
     
     target_idx = None
-    if 'obs_ND_diff1' in obs_cols:
-        target_idx = obs_cols.index('obs_ND_diff1') if isinstance(obs_cols, list) else obs_cols.tolist().index('obs_ND_diff1')
+    if 'obs_ND' in obs_cols:
+        target_idx = obs_cols.index('obs_ND') if isinstance(obs_cols, list) else obs_cols.tolist().index('obs_ND')
 
     model = TemporalFusionTransformer(
         num_static_vars=len(static_cols),
@@ -94,22 +94,15 @@ def evaluate():
     
     print("--- Generating Predictions ---")
     with torch.no_grad():
-        for static, past, known, y_diff, y_vol, y_trend, nd_current in test_loader:
+        for static, past, known, y_abs, y_vol, y_trend, nd_current in test_loader:
             static, past, known = static.to(device), past.to(device), known.to(device)
             
-            pred_diff, pred_vol, pred_trend, attn_weights = model(static, past, known)
+            pred_abs, pred_vol, pred_trend, attn_weights = model(static, past, known)
             
-            # Reconstruct absolute demand
-            # pred_diff and y_diff are (batch, horizon)
-            # nd_current is (batch,)
-            
-            # Cumulative sum across horizon:
-            pred_diff_np = pred_diff.cpu().numpy()
-            y_diff_np = y_diff.numpy()
+            # Direct absolute demand
+            pred_nd_abs = pred_abs.cpu().numpy()
+            actual_nd_abs = y_abs.numpy()
             nd_curr_np = nd_current.numpy()[:, None] # (batch, 1)
-            
-            pred_nd_abs = nd_curr_np + np.cumsum(pred_diff_np, axis=1)
-            actual_nd_abs = nd_curr_np + np.cumsum(y_diff_np, axis=1)
             
             test_predictions_nd.append(pred_nd_abs)
             actual_targets_nd.append(actual_nd_abs)

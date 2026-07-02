@@ -23,7 +23,7 @@ class TFTDataset(Dataset):
         self.X_known = torch.tensor(df[known_cols].values, dtype=torch.float32)
         self.X_static = torch.tensor(df[static_cols].values, dtype=torch.float32)
         
-        self.y_diff = torch.tensor(df['TARGET_ND_DIFF'].values, dtype=torch.float32)
+        self.y_abs = torch.tensor(df['ND_CURRENT'].values, dtype=torch.float32)
         self.nd_current = torch.tensor(df['ND_CURRENT'].values, dtype=torch.float32)
         self.y_vol = torch.tensor(df['TARGET_VOL'].values, dtype=torch.float32)
         self.y_trend = torch.tensor(df['TARGET_TREND'].values, dtype=torch.float32)
@@ -48,14 +48,14 @@ class TFTDataset(Dataset):
         target_idx_start = idx + self.seq_length
         target_idx_end = idx + self.seq_length + self.horizon
         
-        y_diff = self.y_diff[target_idx_start : target_idx_end]
+        y_abs = self.y_abs[target_idx_start : target_idx_end]
         y_vol = self.y_vol[target_idx_start : target_idx_end]
         y_trend = self.y_trend[target_idx_start : target_idx_end]
         
         # The last known value before the prediction horizon starts
         nd_current = self.nd_current[idx + self.seq_length - 1]
         
-        return static, past_obs, future_known, y_diff, y_vol, y_trend, nd_current
+        return static, past_obs, future_known, y_abs, y_vol, y_trend, nd_current
 
 # Enable TF32
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -107,8 +107,8 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device=="cuda"))
 
     target_idx = None
-    if 'obs_ND_diff1' in obs_cols:
-        target_idx = obs_cols.index('obs_ND_diff1') if isinstance(obs_cols, list) else obs_cols.tolist().index('obs_ND_diff1')
+    if 'obs_ND' in obs_cols:
+        target_idx = obs_cols.index('obs_ND') if isinstance(obs_cols, list) else obs_cols.tolist().index('obs_ND')
 
     model = TemporalFusionTransformer(
         num_static_vars=len(static_cols),
@@ -152,20 +152,20 @@ def train():
             model.train()
             train_loss = 0.0
             
-            for batch_idx, (static, past, known, y_diff, y_vol, y_trend, _) in enumerate(train_loader):
+            for batch_idx, (static, past, known, y_abs, y_vol, y_trend, _) in enumerate(train_loader):
                 static = static.to(device)
                 past = past.to(device)
                 known = known.to(device)
-                y_diff = y_diff.to(device)
+                y_abs = y_abs.to(device)
                 y_vol = y_vol.to(device)
                 y_trend = y_trend.to(device)
                 
                 optimizer.zero_grad(set_to_none=True)
                 
-                pred_diff, pred_vol, pred_trend, _ = model(static, past, known)
+                pred_abs, pred_vol, pred_trend, _ = model(static, past, known)
                 
                 # Joint loss over H steps for all targets
-                loss_nd = criterion(pred_diff, y_diff)
+                loss_nd = criterion(pred_abs, y_abs)
                 loss_vol = criterion(pred_vol, y_vol)
                 loss_trend = criterion(pred_trend, y_trend)
                 
@@ -185,17 +185,17 @@ def train():
             val_nd_loss = 0.0
             
             with torch.no_grad():
-                for static, past, known, y_diff, y_vol, y_trend, _ in val_loader:
+                for static, past, known, y_abs, y_vol, y_trend, _ in val_loader:
                     static = static.to(device)
                     past = past.to(device)
                     known = known.to(device)
-                    y_diff = y_diff.to(device)
+                    y_abs = y_abs.to(device)
                     y_vol = y_vol.to(device)
                     y_trend = y_trend.to(device)
                     
-                    pred_diff, pred_vol, pred_trend, _ = model(static, past, known)
+                    pred_abs, pred_vol, pred_trend, _ = model(static, past, known)
                     
-                    loss_nd = criterion(pred_diff, y_diff)
+                    loss_nd = criterion(pred_abs, y_abs)
                     loss_vol = criterion(pred_vol, y_vol)
                     loss_trend = criterion(pred_trend, y_trend)
                     
