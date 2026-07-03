@@ -21,3 +21,10 @@ Implementation of the Attention-based Mixture of Experts predictor (`UnifiedRegi
 
 ### v6 (Continuous State Forecaster)
 Transition from discrete MoE regimes to an End-to-End Continuous Latent State Space model. Introduces the `ContinuousStateForecaster`, employing a Transformer backbone to model continuous, fluid transitions in the underlying state of the power grid.
+
+### v7 (Temporal Fusion Transformer & Causal Weather Drivers)
+A major leap into Direct Multi-Step deep learning using a Temporal Fusion Transformer (TFT). 
+- **Architecture**: Predicts the next 48 half-hourly steps (24 hours) simultaneously using a Variable Selection Network, LSTM sequence encoders, and an Interpretable Multi-Head Attention mechanism.
+- **Overcoming Compounding Error**: Switched from predicting sequence differences to predicting absolute demand directly, eliminating catastrophic error drift across the multi-step horizon.
+- **Causal Anchoring**: Integrated the Open-Meteo API (`fetch_weather.py`) to inject 10 years of historical weather data (temperature, windspeed, cloud cover, shortwave radiation) into the known future context.
+- **Autoregressive Stress Testing**: Demonstrated extreme long-term resilience via `test_autoregressive.py`, maintaining an $R^2$ of 0.80 and MAE of ~0.32 over a continuous 1.5-year simulation where the model fed purely on its own predictions.
