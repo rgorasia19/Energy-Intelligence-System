@@ -84,6 +84,13 @@ def evaluate_autoregressive():
     X_static = X_static.to(device)
     y_abs = y_abs.to(device)
     
+    # Identify weather variables to simulate forecast degradation
+    weather_vars = ['known_temperature_2m', 'known_cloudcover', 'known_windspeed_10m', 'known_shortwave_radiation']
+    weather_indices = [known_cols.index(col) for col in weather_vars if col in known_cols]
+    
+    # Linearly scale noise standard deviation from 0.0 to 0.5 over the 48-step horizon
+    noise_stds = torch.linspace(0.0, 0.5, horizon, device=device).unsqueeze(1)
+    
     ar_predictions = []
     actuals = []
     
@@ -96,8 +103,30 @@ def evaluate_autoregressive():
         past_obs = X_obs_ar[idx : idx + seq_len].unsqueeze(0)
         future_known = X_known[idx : idx + seq_len + horizon].unsqueeze(0)
         
+        noisy_future_known = future_known.clone()
+        if len(weather_indices) > 0:
+            noise = torch.randn(horizon, len(weather_indices), device=device) * noise_stds
+            for i, w_idx in enumerate(weather_indices):
+                noisy_future_known[0, seq_len:, w_idx] += noise[:, i]
+                
+            # Black Swan Event Injection: ~2% chance of a massive sustained anomaly in the forecast
+            if torch.rand(1).item() < 0.02:
+                # Pick a random weather variable to spike
+                spike_var_idx = torch.randint(0, len(weather_indices), (1,)).item()
+                w_idx = weather_indices[spike_var_idx]
+                
+                # Create a massive spike (+4 to +6 stds or -4 to -6 stds)
+                spike_magnitude = (torch.rand(1).item() * 2 + 4) * (1 if torch.rand(1).item() > 0.5 else -1)
+                
+                # Apply it to a block of 12-24 steps (6-12 hours)
+                spike_start = torch.randint(0, max(1, horizon - 12), (1,)).item()
+                spike_duration = torch.randint(12, 24, (1,)).item()
+                spike_end = min(horizon, spike_start + spike_duration)
+                
+                noisy_future_known[0, seq_len + spike_start : seq_len + spike_end, w_idx] += spike_magnitude
+                
         with torch.no_grad():
-            pred_abs, _, _, _ = model(static, past_obs, future_known)
+            pred_abs, _, _, _ = model(static, past_obs, noisy_future_known)
             
         # Overwrite the future sequence in X_obs_ar with our predictions.
         # obs_ND is column 0 based on target_idx.
@@ -123,7 +152,7 @@ def evaluate_autoregressive():
     print(f"Long-term Autoregressive R2: {r2:.4f}")
     
     print("--- Generating Plot ---")
-    plot_filename = f"../plots/run10/autoregressive_full_test_v7_{short_run_id}.png"
+    plot_filename = f"../plots/run10/autoregressive_black_swan_v7_{short_run_id}.png"
     os.makedirs(os.path.dirname(plot_filename), exist_ok=True)
     
     # Plotting the whole trajectory is messy, let's plot a few months (e.g. 10000 steps)
@@ -131,8 +160,8 @@ def evaluate_autoregressive():
     
     plt.figure(figsize=(24, 6))
     plt.plot(actual_nd_arr[:viz_steps], label='Actual Demand (Scaled)', color='blue', alpha=0.5, linewidth=1)
-    plt.plot(pred_nd_arr[:viz_steps], label='AR Forecast Demand (Scaled)', color='red', alpha=0.8, linewidth=1)
-    plt.title(f'Continuous Autoregressive Forecast vs Actual - First {viz_steps} Steps (v7) - Run: {short_run_id}')
+    plt.plot(pred_nd_arr[:viz_steps], label='Black Swan AR Forecast (Scaled)', color='red', alpha=0.8, linewidth=1)
+    plt.title(f'Autoregressive Forecast with Black Swan Outliers - First {viz_steps} Steps (v7) - Run: {short_run_id}')
     plt.xlabel('Time Step (30min intervals)')
     plt.ylabel('Demand (Scaled)')
     plt.legend()
