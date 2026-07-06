@@ -4,7 +4,7 @@ import os
 import datetime as dt
 
 file_path = "../../datalake/raw_data/"
-files = [f for f in os.listdir(file_path) if f.endswith(".csv")]
+files = [f for f in os.listdir(file_path) if f.startswith("demanddata_") and f.endswith(".csv")]
 
 # Read the 2026 file to get target columns
 df_2026 = pd.read_csv(os.path.join(file_path, "demanddata_2026.csv"))

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-data_dir = "../datalake/generation_mix.csv"
+data_dir = "../../datalake/raw_data/generation_mix.csv"
 
 print(f"Reading {data_dir}...")
 df = pd.read_csv(data_dir)

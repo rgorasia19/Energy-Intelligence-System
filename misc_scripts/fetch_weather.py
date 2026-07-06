@@ -46,9 +46,9 @@ def fetch_weather_data(start_date, end_date, lat=51.5074, lon=-0.1278):
     return df_half_hourly
 
 if __name__ == "__main__":
-    start_date = "2016-01-01"
+    start_date = "2009-01-01"
     end_date = "2026-05-15"
-    out_dir = "../../datalake/raw_data"
+    out_dir = "../datalake/raw_data"
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, "weather_data.csv")
     
