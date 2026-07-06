@@ -1,0 +1,190 @@
+import os
+import sys
+
+if sys.platform == 'win32' and sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import pandas as pd
+import numpy as np
+import joblib
+import dagshub
+import mlflow
+import mlflow.pytorch
+from torch.utils.data import DataLoader
+
+from feature_prep import SSMDataset
+from models.ssm import LatentSSM, SSMLoss
+
+# Enable TF32
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+class EarlyStopping:
+    def __init__(self, patience=5, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif val_loss > self.best_loss - self.min_delta:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_loss = val_loss
+            self.counter = 0
+
+def train():
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using device: {device}")
+
+    data_dir = '../../datalake/ssm_tensors/'
+    train_data = pd.read_parquet(os.path.join(data_dir, 'train.parquet'))
+    val_data = pd.read_parquet(os.path.join(data_dir, 'val.parquet'))
+    
+    col_info = joblib.load(os.path.join(data_dir, 'columns.pkl'))
+    feature_cols = col_info['feature_columns']
+    target_cols = col_info['target_columns']
+    
+    demand_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
+    gen_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'GENERATION']
+    
+    demand_idx = [target_cols.index(c) for c in demand_cols]
+    gen_idx = [target_cols.index(c) for c in gen_cols]
+    
+    seq_len = 60
+    horizon = 30
+    batch_size = 256
+    latent_dim = 8
+    hidden_dim = 64
+
+    train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
+                               feature_columns=feature_cols, target_columns=target_cols)
+    val_dataset = SSMDataset(val_data, seq_len=seq_len, horizon=horizon, 
+                             feature_columns=feature_cols, target_columns=target_cols)
+    
+    num_workers = 4 if device == "cuda" else 0
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, 
+                              num_workers=num_workers, pin_memory=(device=="cuda"))
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, 
+                            num_workers=num_workers, pin_memory=(device=="cuda"))
+
+    model = LatentSSM(
+        input_dim=len(feature_cols),
+        demand_dim=len(demand_cols),
+        gen_dim=len(gen_cols),
+        latent_dim=latent_dim,
+        hidden_dim=hidden_dim
+    ).to(device)
+
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    criterion = SSMLoss(kl_weight=1.0, smooth_weight=0.1)
+    
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
+    
+    epochs = 50
+    
+    # DagsHub Auth (matches TFT train.py)
+    os.environ["MLFLOW_TRACKING_USERNAME"] = "rgorasia19"
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = "26b84ad06cab16667533b56a5cebe4ebf27d8f9a"
+    
+    dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
+    mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")
+    mlflow.set_experiment("ssm_long_horizon")
+    
+    with mlflow.start_run():
+        mlflow.log_params({
+            "seq_len": seq_len,
+            "horizon": horizon,
+            "latent_dim": latent_dim,
+            "hidden_dim": hidden_dim,
+            "batch_size": batch_size,
+            "learning_rate": 1e-3,
+        })
+        
+        for epoch in range(epochs):
+            model.train()
+            train_loss = 0.0
+            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_div': 0, 'smoothness': 0}
+            
+            for batch in train_loader:
+                enc_inputs = batch['encoder_inputs'].to(device)
+                dec_targets = batch['decoder_targets'].to(device)
+                dec_masks = batch['decoder_mask'].to(device)
+                
+                optimizer.zero_grad(set_to_none=True)
+                
+                outputs = model(enc_inputs, horizon)
+                
+                loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epoch, epochs)
+                
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                
+                train_loss += loss.item()
+                for k in train_metrics_sum:
+                    train_metrics_sum[k] += metrics[k]
+                
+            train_loss /= len(train_loader)
+            for k in train_metrics_sum:
+                train_metrics_sum[k] /= len(train_loader)
+            
+            model.eval()
+            val_loss = 0.0
+            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_div': 0, 'smoothness': 0}
+            
+            with torch.no_grad():
+                for batch in val_loader:
+                    enc_inputs = batch['encoder_inputs'].to(device)
+                    dec_targets = batch['decoder_targets'].to(device)
+                    dec_masks = batch['decoder_mask'].to(device)
+                    
+                    outputs = model(enc_inputs, horizon)
+                    
+                    # For validation, act as if it's the final epoch to fully evaluate un-annealed KL
+                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs)
+                    
+                    val_loss += loss.item()
+                    for k in val_metrics_sum:
+                        val_metrics_sum[k] += metrics[k]
+                        
+            val_loss /= len(val_loader)
+            for k in val_metrics_sum:
+                val_metrics_sum[k] /= len(val_loader)
+            
+            scheduler.step(val_loss)
+            
+            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand: {val_metrics_sum['loss_demand']:.4f}, Gen: {val_metrics_sum['loss_gen']:.4f})")
+            
+            mlflow.log_metrics({
+                "train_loss": train_loss,
+                "val_loss": val_loss,
+                "val_demand_loss": val_metrics_sum['loss_demand'],
+                "val_gen_loss": val_metrics_sum['loss_gen'],
+                "val_kl_div": val_metrics_sum['kl_div']
+            }, step=epoch)
+            
+            early_stopping(val_loss)
+            if early_stopping.early_stop:
+                print("Early stopping triggered")
+                break
+                
+        # Save model and artifacts
+        os.makedirs('saved_models', exist_ok=True)
+        model_path = "saved_models/ssm_v1.pth"
+        torch.save(model.state_dict(), model_path)
+        mlflow.log_artifact(model_path)
+        
+        print("Training complete and model saved.")
+
+if __name__ == "__main__":
+    train()
