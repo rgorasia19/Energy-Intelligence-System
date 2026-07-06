@@ -15,23 +15,28 @@ def main():
     df_demand = pd.read_csv(os.path.join(raw_dir, 'merged_demanddata.csv'))
     df_gen = pd.read_csv(os.path.join(raw_dir, 'generation_mix.csv'))
     df_weather = pd.read_csv(os.path.join(raw_dir, 'weather_data.csv'))
+    df_macro = pd.read_csv(os.path.join(raw_dir, 'macro_data.csv'))
     
     # Define which columns are continuous vs flow
     demand_flow_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
+    demand_cont_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     gen_flow_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'GENERATION']
     weather_cont_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
+    macro_cont_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     
     print("Standardising timeseries...")
-    df_demand_daily = standardise_timeseries(df_demand, 'DATETIME', continuous_cols=[], flow_cols=demand_flow_cols)
+    df_demand_daily = standardise_timeseries(df_demand, 'DATETIME', continuous_cols=demand_cont_cols, flow_cols=demand_flow_cols)
     df_gen_daily = standardise_timeseries(df_gen, 'DATETIME', continuous_cols=[], flow_cols=gen_flow_cols)
     df_weather_daily = standardise_timeseries(df_weather, 'DATETIME', continuous_cols=weather_cont_cols, flow_cols=[])
+    df_macro_daily = standardise_timeseries(df_macro, 'DATETIME', continuous_cols=macro_cont_cols, flow_cols=[])
     
     # 2. Merge
     print("Merging features...")
     dfs = {
-        'demand': df_demand_daily,
-        'gen': df_gen_daily,
-        'weather': df_weather_daily
+        'DEMAND_': df_demand_daily,
+        'GEN_': df_gen_daily,
+        'WEATHER_': df_weather_daily,
+        'MACRO_': df_macro_daily
     }
     # This will outer join and fill missingness masks, starting from 2001-01-01
     merged = merge_features(dfs, start_date='2001-01-01')

@@ -63,7 +63,9 @@ def evaluate():
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos')]
-    known_columns = weather_cols + calendar_cols
+    embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
+    macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
+    known_columns = weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
     
     model = LatentSSM(

@@ -67,7 +67,11 @@ def train():
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos')]
-    known_columns = weather_cols + calendar_cols
+    embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
+    macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
+    
+    # Only include cols if they actually exist in feature_cols (safeguard)
+    known_columns = weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     
     # We need to compute known_dim dynamically based on the passed columns
     known_dim = len(known_columns)
@@ -96,7 +100,7 @@ def train():
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_weight=0.01, smooth_weight=0.1)
+    criterion = SSMLoss(kl_weight=0.0, smooth_weight=0.05)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
