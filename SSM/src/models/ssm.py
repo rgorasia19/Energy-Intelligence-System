@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=8, hidden_dim=64):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=8, hidden_dim=64, dropout=0.1):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
@@ -21,6 +21,7 @@ class LatentSSM(nn.Module):
         self.f_net = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_dim, latent_dim)
         )
         self.gate_net = nn.Linear(latent_dim, latent_dim)
@@ -34,8 +35,10 @@ class LatentSSM(nn.Module):
         self.emission_shared = nn.Sequential(
             nn.Linear(latent_dim + known_dim, hidden_dim),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Dropout(dropout)
         )
         
         # Multi-head emission

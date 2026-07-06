@@ -81,10 +81,11 @@ def train():
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
         latent_dim=latent_dim,
-        hidden_dim=hidden_dim
+        hidden_dim=hidden_dim,
+        dropout=0.2
     ).to(device)
 
-    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
     criterion = SSMLoss(kl_weight=1.0, smooth_weight=0.1)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
