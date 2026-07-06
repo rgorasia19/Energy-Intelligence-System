@@ -25,8 +25,8 @@ if [[ "$MLFLOW_TRACKING_URI" != *"dagshub.com"* ]]; then
     exit 1
 fi
 
-echo "==> Moving to v7/src and starting evaluation..."
-cd v7/src
+echo "==> Moving to SSM/src and starting evaluation..."
+cd SSM/src
 python eval.py
 
 echo "==> Evaluation sequence completed successfully!"
