@@ -97,10 +97,11 @@ def evaluate():
     with torch.no_grad():
         for batch in test_loader:
             enc_inputs = batch['encoder_inputs'].to(device)
+            dec_inputs = batch['decoder_inputs'].to(device)
             dec_targets = batch['decoder_targets'].numpy()
             dec_masks = batch['decoder_mask'].numpy()
             
-            outputs = model(enc_inputs, horizon)
+            outputs = model(enc_inputs, dec_inputs, horizon)
             
             pred_demand = outputs['pred_demand'].cpu().numpy()
             pred_gen = outputs['pred_gen'].cpu().numpy()
@@ -178,6 +179,7 @@ def evaluate():
     print("Generating Monte Carlo Fan Chart...")
     # Take the very first sequence in the test set
     sample_enc_inputs = test_dataset[0]['encoder_inputs'].unsqueeze(0).to(device)
+    sample_dec_inputs = test_dataset[0]['decoder_inputs'].unsqueeze(0).to(device)
     sample_true_demand = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy() # First demand target (e.g., ND)
     
     model.train() # Enable process noise sampling
@@ -186,7 +188,7 @@ def evaluate():
     
     with torch.no_grad():
         for _ in range(mc_passes):
-            out = model(sample_enc_inputs, horizon)
+            out = model(sample_enc_inputs, sample_dec_inputs, horizon)
             # Take the first demand output
             mc_preds.append(out['pred_demand'][0, :, 0].cpu().numpy())
             

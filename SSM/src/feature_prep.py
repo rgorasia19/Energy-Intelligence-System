@@ -157,7 +157,7 @@ def transform_data(df: pd.DataFrame, scaler: RobustScaler, feature_cols: list) -
     return df
 
 class SSMDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, seq_len: int, horizon: int, feature_columns: list, target_columns: list, max_missing_pct: float = 0.1):
+    def __init__(self, df: pd.DataFrame, seq_len: int, horizon: int, feature_columns: list, target_columns: list, known_columns: list = None, max_missing_pct: float = 0.1):
         self.seq_len = seq_len
         self.horizon = horizon
         self.feature_columns = feature_columns
@@ -167,6 +167,11 @@ class SSMDataset(Dataset):
         self.features = df[feature_columns].values
         self.targets = df[target_columns].values
         
+        if known_columns is None:
+            # Fallback to identify sin/cos calendar features if not explicitly provided
+            known_columns = [c for c in df.columns if c.endswith('_sin') or c.endswith('_cos')]
+        self.known_features = df[known_columns].values
+        
         # Pre-calculate masks: 1 if present (not NaN), 0 if missing (NaN)
         self.feature_masks = (~np.isnan(self.features)).astype(np.float32)
         self.target_masks = (~np.isnan(self.targets)).astype(np.float32)
@@ -174,6 +179,7 @@ class SSMDataset(Dataset):
         # Zero-fill NaNs for tensor conversion (the mask will tell the model to ignore them)
         self.features = np.nan_to_num(self.features, nan=0.0)
         self.targets = np.nan_to_num(self.targets, nan=0.0)
+        self.known_features = np.nan_to_num(self.known_features, nan=0.0)
         
         self.valid_indices = self._get_valid_indices()
         
@@ -204,12 +210,15 @@ class SSMDataset(Dataset):
         encoder_inputs = torch.tensor(self.features[start_idx:enc_end], dtype=torch.float32)
         encoder_mask = torch.tensor(self.feature_masks[start_idx:enc_end], dtype=torch.float32)
         
+        decoder_inputs = torch.tensor(self.known_features[enc_end:dec_end], dtype=torch.float32)
+        
         decoder_targets = torch.tensor(self.targets[enc_end:dec_end], dtype=torch.float32)
         decoder_mask = torch.tensor(self.target_masks[enc_end:dec_end], dtype=torch.float32)
         
         return {
             "encoder_inputs": encoder_inputs,
             "encoder_mask": encoder_mask,
+            "decoder_inputs": decoder_inputs,
             "decoder_targets": decoder_targets,
             "decoder_mask": decoder_mask
         }

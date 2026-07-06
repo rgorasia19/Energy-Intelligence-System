@@ -117,12 +117,13 @@ def train():
             
             for batch in train_loader:
                 enc_inputs = batch['encoder_inputs'].to(device)
+                dec_inputs = batch['decoder_inputs'].to(device)
                 dec_targets = batch['decoder_targets'].to(device)
                 dec_masks = batch['decoder_mask'].to(device)
                 
                 optimizer.zero_grad(set_to_none=True)
                 
-                outputs = model(enc_inputs, horizon)
+                outputs = model(enc_inputs, dec_inputs, horizon)
                 
                 loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epoch, epochs)
                 
@@ -145,10 +146,11 @@ def train():
             with torch.no_grad():
                 for batch in val_loader:
                     enc_inputs = batch['encoder_inputs'].to(device)
+                    dec_inputs = batch['decoder_inputs'].to(device)
                     dec_targets = batch['decoder_targets'].to(device)
                     dec_masks = batch['decoder_mask'].to(device)
                     
-                    outputs = model(enc_inputs, horizon)
+                    outputs = model(enc_inputs, dec_inputs, horizon)
                     
                     # For validation, act as if it's the final epoch to fully evaluate un-annealed KL
                     loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs)

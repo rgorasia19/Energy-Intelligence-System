@@ -3,11 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, latent_dim=8, hidden_dim=64):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=8, hidden_dim=64):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
         self.gen_dim = gen_dim
+        self.known_dim = known_dim
         
         # 1. Encoder (Inference Net for z_0)
         # Takes past context (encoder_inputs) and outputs q(z_0 | x_{1:T})
@@ -29,9 +30,9 @@ class LatentSSM(nn.Module):
         self.prior_logvar = nn.Parameter(torch.zeros(1, latent_dim))
         
         # 3. Emission Model (Decoder)
-        # Maps z_t to observations
+        # Maps z_t + calendar features to observations
         self.emission_shared = nn.Sequential(
-            nn.Linear(latent_dim, hidden_dim),
+            nn.Linear(latent_dim + known_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU()
@@ -68,19 +69,22 @@ class LatentSSM(nn.Module):
         z_next_mean = z_prev + gate * f_z
         return z_next_mean
         
-    def emit(self, z):
+    def emit(self, z, decoder_inputs):
         """
-        Maps latent state sequence to predictions.
+        Maps latent state sequence + known futures to predictions.
         z: [batch, horizon, latent_dim]
+        decoder_inputs: [batch, horizon, known_dim]
         """
-        shared_features = self.emission_shared(z)
+        emission_input = torch.cat([z, decoder_inputs], dim=-1)
+        shared_features = self.emission_shared(emission_input)
         pred_demand = self.demand_head(shared_features)
         pred_gen = self.gen_head(shared_features)
         return pred_demand, pred_gen
         
-    def forward(self, encoder_inputs, horizon):
+    def forward(self, encoder_inputs, decoder_inputs, horizon):
         """
         encoder_inputs: [batch, seq_len, input_dim]
+        decoder_inputs: [batch, horizon, known_dim]
         horizon: int
         """
         batch_size = encoder_inputs.size(0)
@@ -102,7 +106,7 @@ class LatentSSM(nn.Module):
         z_seq = torch.stack(z_seq, dim=1) # [batch, horizon, latent_dim]
         
         # 3. Emit predictions
-        pred_demand, pred_gen = self.emit(z_seq)
+        pred_demand, pred_gen = self.emit(z_seq, decoder_inputs)
         
         return {
             'z0_mean': z0_mean,
