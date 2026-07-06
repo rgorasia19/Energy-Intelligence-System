@@ -61,10 +61,16 @@ def evaluate():
     latent_dim = 8
     hidden_dim = 64
     
+    weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
+    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos')]
+    known_columns = weather_cols + calendar_cols
+    known_dim = len(known_columns)
+    
     model = LatentSSM(
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
+        known_dim=known_dim,
         latent_dim=latent_dim,
         hidden_dim=hidden_dim
     )
@@ -75,7 +81,8 @@ def evaluate():
     
     batch_size = 256
     test_dataset = SSMDataset(test_data, seq_len=seq_len, horizon=horizon, 
-                              feature_columns=feature_cols, target_columns=target_cols)
+                              feature_columns=feature_cols, target_columns=target_cols,
+                              known_columns=known_columns)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"

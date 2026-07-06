@@ -65,10 +65,19 @@ def train():
     latent_dim = 8
     hidden_dim = 64
 
+    weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
+    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos')]
+    known_columns = weather_cols + calendar_cols
+    
+    # We need to compute known_dim dynamically based on the passed columns
+    known_dim = len(known_columns)
+
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
-                               feature_columns=feature_cols, target_columns=target_cols)
+                               feature_columns=feature_cols, target_columns=target_cols,
+                               known_columns=known_columns)
     val_dataset = SSMDataset(val_data, seq_len=seq_len, horizon=horizon, 
-                             feature_columns=feature_cols, target_columns=target_cols)
+                             feature_columns=feature_cols, target_columns=target_cols,
+                             known_columns=known_columns)
     
     num_workers = 4 if device == "cuda" else 0
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, 
@@ -80,13 +89,14 @@ def train():
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
+        known_dim=known_dim,
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
         dropout=0.2
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_weight=1.0, smooth_weight=0.1)
+    criterion = SSMLoss(kl_weight=0.01, smooth_weight=0.1)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
     early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
