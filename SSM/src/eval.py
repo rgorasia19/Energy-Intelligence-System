@@ -67,7 +67,7 @@ def evaluate():
     
     seq_len = 60
     horizon = 30
-    latent_dim = 16
+    latent_dim = 8
     hidden_dim = 64
     num_regimes = 4
     

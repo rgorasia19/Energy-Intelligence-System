@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=16, hidden_dim=64, num_regimes=4, dropout=0.2):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=8, hidden_dim=64, num_regimes=4, dropout=0.2):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
