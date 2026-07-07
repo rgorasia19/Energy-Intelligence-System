@@ -191,13 +191,13 @@ def evaluate():
     sample_dec_inputs = test_dataset[0]['decoder_inputs'].unsqueeze(0).to(device)
     sample_true_demand = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy() # First demand target (e.g., ND)
     
-    model.train() # Enable process noise sampling
+    # model.train() # Enable process noise sampling - REMOVED: dropout caused divergence
     mc_passes = 100
     mc_preds = []
     
     with torch.no_grad():
         for _ in range(mc_passes):
-            out = model(sample_enc_inputs, sample_dec_inputs, horizon)
+            out = model(sample_enc_inputs, sample_dec_inputs, horizon, sample=True)
             # Take the first demand output
             mc_preds.append(out['pred_demand'][0, :, 0].cpu().numpy())
             

@@ -21,7 +21,6 @@ class LatentSSM(nn.Module):
         self.f_net = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
             nn.ReLU(),
-            nn.Dropout(dropout),
             nn.Linear(hidden_dim, latent_dim)
         )
         self.gate_net = nn.Linear(latent_dim, latent_dim)
@@ -84,7 +83,7 @@ class LatentSSM(nn.Module):
         pred_gen = self.gen_head(shared_features)
         return pred_demand, pred_gen
         
-    def forward(self, encoder_inputs, decoder_inputs, horizon):
+    def forward(self, encoder_inputs, decoder_inputs, horizon, sample=False):
         """
         encoder_inputs: [batch, seq_len, input_dim]
         decoder_inputs: [batch, horizon, known_dim]
@@ -94,15 +93,18 @@ class LatentSSM(nn.Module):
         
         # 1. Infer initial state z0
         z0_mean, z0_logvar = self.encode(encoder_inputs)
-        z0 = self.reparameterize(z0_mean, z0_logvar)
+        if self.training or sample:
+            z0 = self.reparameterize(z0_mean, z0_logvar)
+        else:
+            z0 = z0_mean
         
         # 2. Rollout latent dynamics over horizon
         z_seq = []
         z_curr = z0
         for _ in range(horizon):
             z_curr = self.transition(z_curr)
-            # Add process noise during training (optional, or just use the mean for emission)
-            if self.training:
+            # Add process noise during training or when explicitly sampling
+            if self.training or sample:
                 z_curr = self.reparameterize(z_curr, self.prior_logvar.expand(batch_size, -1))
             z_seq.append(z_curr)
             
