@@ -64,11 +64,11 @@ class LatentSSM(nn.Module):
         
     def transition(self, z_prev):
         """
-        z_t = z_{t-1} + sigma(W z_{t-1}) * f(z_{t-1})
+        z_t = (1 - gate) * z_{t-1} + gate * f(z_{t-1})
         """
         f_z = self.f_net(z_prev)
         gate = torch.sigmoid(self.gate_net(z_prev))
-        z_next_mean = z_prev + gate * f_z
+        z_next_mean = (1 - gate) * z_prev + gate * f_z
         return z_next_mean
         
     def emit(self, z, decoder_inputs):
