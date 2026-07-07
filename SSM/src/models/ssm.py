@@ -3,36 +3,47 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=32, hidden_dim=64, dropout=0.2):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=32, hidden_dim=64, num_regimes=4, dropout=0.2):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
         self.gen_dim = gen_dim
         self.known_dim = known_dim
+        self.num_regimes = num_regimes
         
-        # 1. Encoder (Inference Net for z_0)
-        # Takes past context (encoder_inputs) and outputs q(z_0 | x_{1:T})
+        # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
         self.z0_mean = nn.Linear(hidden_dim, latent_dim)
-        self.z0_logvar = nn.Linear(hidden_dim, latent_dim)
+        self.z0_raw_var = nn.Linear(hidden_dim, latent_dim)
         
-        # 2. Latent Dynamics (Prior Net)
-        # Gated residual dynamics: z_t = z_{t-1} + sigma(W z_{t-1}) * f(z_{t-1}) + eps
-        self.f_net = nn.Sequential(
-            nn.Linear(latent_dim, hidden_dim),
-            nn.Tanh(),
-            nn.Linear(hidden_dim, latent_dim)
+        # Initial regime prior
+        self.r0_logits = nn.Linear(hidden_dim, num_regimes)
+        
+        # 2. Bidirectional Smoothing Posterior
+        # Takes future targets + known futures to infer optimal z_t and r_t
+        self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + known_dim, hidden_dim, batch_first=True, bidirectional=True)
+        self.post_r_logits = nn.Linear(hidden_dim * 2, num_regimes)
+        self.post_z_mean = nn.Linear(hidden_dim * 2, latent_dim)
+        self.post_z_raw_var = nn.Linear(hidden_dim * 2, latent_dim)
+        
+        # 3. Prior Transition Dynamics
+        # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
+        self.prior_r_net = nn.Sequential(
+            nn.Linear(latent_dim + num_regimes + known_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_regimes)
         )
-        self.gate_net = nn.Linear(latent_dim, latent_dim)
         
-        # Prior variance (can be learned or fixed)
-        # Using a small learned variance for process noise
-        self.prior_logvar = nn.Parameter(torch.zeros(1, latent_dim))
+        # Continuous transition: p(z_t | z_{t-1}, r_t, u_t)
+        self.prior_z_net = nn.Sequential(
+            nn.Linear(latent_dim + num_regimes + known_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var
+        )
         
-        # 3. Emission Model (Decoder)
-        # Maps z_t + z_0 + calendar features to observations
-        self.emission_shared = nn.Sequential(
-            nn.Linear(2 * latent_dim + known_dim, hidden_dim),
+        # 4. Probabilistic Emission
+        self.emit_shared = nn.Sequential(
+            nn.Linear(latent_dim + known_dim, hidden_dim), # no r_t here to force z_t to carry the state
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, hidden_dim),
@@ -40,107 +51,183 @@ class LatentSSM(nn.Module):
             nn.Dropout(dropout)
         )
         
-        # Multi-head emission
-        self.demand_head = nn.Linear(hidden_dim, demand_dim)
-        self.gen_head = nn.Linear(hidden_dim, gen_dim)
+        self.demand_mean = nn.Linear(hidden_dim, demand_dim)
+        self.demand_raw_var = nn.Linear(hidden_dim, demand_dim)
+        self.gen_mean = nn.Linear(hidden_dim, gen_dim)
+        self.gen_raw_var = nn.Linear(hidden_dim, gen_dim)
         
-    def encode(self, x):
-        """
-        x: [batch, seq_len, input_dim]
-        returns: z0_mean [batch, latent_dim], z0_logvar [batch, latent_dim]
-        """
-        _, h_n = self.encoder_gru(x)
-        h_t = h_n[-1] # [batch, hidden_dim]
+    def _get_var(self, raw_var):
+        # Softplus with variance floor to prevent deterministic collapse
+        return F.softplus(raw_var) + 1e-4
         
-        z0_mean = self.z0_mean(h_t)
-        z0_logvar = self.z0_logvar(h_t)
-        
-        return z0_mean, z0_logvar
-        
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
+    def reparameterize_gaussian(self, mu, var):
+        std = torch.sqrt(var)
         eps = torch.randn_like(std)
         return mu + eps * std
         
-    def transition(self, z_prev):
-        """
-        z_t = (1 - gate) * z_{t-1} + gate * f(z_{t-1})
-        """
-        f_z = self.f_net(z_prev)
-        gate = torch.sigmoid(self.gate_net(z_prev))
-        z_next_mean = (1 - gate) * z_prev + gate * f_z
-        return z_next_mean
+    def sample_regime(self, logits, tau=1.0, hard=True):
+        return F.gumbel_softmax(logits, tau=tau, hard=hard, dim=-1)
         
-    def emit(self, z, z0_seq, decoder_inputs):
-        """
-        Maps latent state sequence + known futures to predictions.
-        z: [batch, horizon, latent_dim]
-        z0_seq: [batch, horizon, latent_dim]
-        decoder_inputs: [batch, horizon, known_dim]
-        """
-        emission_input = torch.cat([z, z0_seq, decoder_inputs], dim=-1)
-        shared_features = self.emission_shared(emission_input)
-        pred_demand = self.demand_head(shared_features)
-        pred_gen = self.gen_head(shared_features)
-        return pred_demand, pred_gen
-        
-    def forward(self, encoder_inputs, decoder_inputs, horizon, sample=False):
+    def forward(self, encoder_inputs, decoder_inputs, horizon, target_seq=None, sample=False, tau=1.0):
         """
         encoder_inputs: [batch, seq_len, input_dim]
         decoder_inputs: [batch, horizon, known_dim]
-        horizon: int
+        target_seq: [batch, horizon, demand_dim + gen_dim] (only during training for posterior)
         """
         batch_size = encoder_inputs.size(0)
+        device = encoder_inputs.device
         
-        # 1. Infer initial state z0
-        z0_mean, z0_logvar = self.encode(encoder_inputs)
+        # 1. Encode past for z0 and r0
+        _, h_n = self.encoder_gru(encoder_inputs)
+        h_t = h_n[-1]
+        
+        z0_mean = self.z0_mean(h_t)
+        z0_var = self._get_var(self.z0_raw_var(h_t))
+        
+        r0_logits = self.r0_logits(h_t)
+        
         if self.training or sample:
-            z0 = self.reparameterize(z0_mean, z0_logvar)
+            z_curr = self.reparameterize_gaussian(z0_mean, z0_var)
+            r_curr = self.sample_regime(r0_logits, tau=tau, hard=True)
         else:
-            z0 = z0_mean
-        
-        # 2. Rollout latent dynamics over horizon
-        z_seq = []
-        z_curr = z0
-        for _ in range(horizon):
-            z_curr = self.transition(z_curr)
-            # Add process noise during training or when explicitly sampling
-            if self.training or sample:
-                z_curr = self.reparameterize(z_curr, self.prior_logvar.expand(batch_size, -1))
-            z_seq.append(z_curr)
+            z_curr = z0_mean
+            r_curr = F.one_hot(torch.argmax(r0_logits, dim=-1), num_classes=self.num_regimes).float()
             
-        z_seq = torch.stack(z_seq, dim=1) # [batch, horizon, latent_dim]
+        # 2. Infer Posterior (if training)
+        post_r_logits_seq = None
+        post_z_mean_seq = None
+        post_z_var_seq = None
         
-        # 3. Emit predictions
-        z0_seq = z0.unsqueeze(1).expand(-1, horizon, -1)
-        pred_demand, pred_gen = self.emit(z_seq, z0_seq, decoder_inputs)
+        if self.training and target_seq is not None:
+            post_inputs = torch.cat([target_seq, decoder_inputs], dim=-1)
+            post_out, _ = self.posterior_lstm(post_inputs)
+            post_r_logits_seq = self.post_r_logits(post_out)
+            post_z_mean_seq = self.post_z_mean(post_out)
+            post_z_var_seq = self._get_var(self.post_z_raw_var(post_out))
+            
+        # 3. Rollout Dynamics
+        prior_r_logits_seq = []
+        prior_z_mean_seq = []
+        prior_z_var_seq = []
+        sampled_z_seq = []
+        sampled_r_seq = []
+        
+        for t in range(horizon):
+            u_t = decoder_inputs[:, t, :]
+            
+            # Prior Regime Transition
+            r_prior_input = torch.cat([z_curr, r_curr, u_t], dim=-1)
+            r_logits = self.prior_r_net(r_prior_input)
+            prior_r_logits_seq.append(r_logits)
+            
+            if self.training and target_seq is not None:
+                # Use posterior samples during training to ground the continuous transition
+                r_logits_t = post_r_logits_seq[:, t, :]
+            else:
+                r_logits_t = r_logits
+                
+            if self.training or sample:
+                r_next = self.sample_regime(r_logits_t, tau=tau, hard=True)
+            else:
+                r_next = F.one_hot(torch.argmax(r_logits_t, dim=-1), num_classes=self.num_regimes).float()
+                
+            # Prior Continuous Transition
+            z_prior_input = torch.cat([z_curr, r_next, u_t], dim=-1)
+            z_out = self.prior_z_net(z_prior_input)
+            z_mean, z_raw_var = torch.split(z_out, self.latent_dim, dim=-1)
+            z_var = self._get_var(z_raw_var)
+            
+            prior_z_mean_seq.append(z_mean)
+            prior_z_var_seq.append(z_var)
+            
+            if self.training and target_seq is not None:
+                z_mean_t = post_z_mean_seq[:, t, :]
+                z_var_t = post_z_var_seq[:, t, :]
+            else:
+                z_mean_t = z_mean
+                z_var_t = z_var
+                
+            if self.training or sample:
+                z_next = self.reparameterize_gaussian(z_mean_t, z_var_t)
+            else:
+                z_next = z_mean_t
+                
+            sampled_r_seq.append(r_next)
+            sampled_z_seq.append(z_next)
+            
+            z_curr = z_next
+            r_curr = r_next
+            
+        prior_r_logits_seq = torch.stack(prior_r_logits_seq, dim=1)
+        prior_z_mean_seq = torch.stack(prior_z_mean_seq, dim=1)
+        prior_z_var_seq = torch.stack(prior_z_var_seq, dim=1)
+        sampled_z_seq = torch.stack(sampled_z_seq, dim=1)
+        sampled_r_seq = torch.stack(sampled_r_seq, dim=1)
+        
+        # 4. Probabilistic Emission
+        emit_input = torch.cat([sampled_z_seq, decoder_inputs], dim=-1)
+        shared_features = self.emit_shared(emit_input)
+        
+        demand_mean = self.demand_mean(shared_features)
+        demand_var = self._get_var(self.demand_raw_var(shared_features))
+        
+        gen_mean = self.gen_mean(shared_features)
+        gen_var = self._get_var(self.gen_raw_var(shared_features))
         
         return {
             'z0_mean': z0_mean,
-            'z0_logvar': z0_logvar,
-            'z_seq': z_seq, # For smoothness penalty
-            'pred_demand': pred_demand,
-            'pred_gen': pred_gen
+            'z0_var': z0_var,
+            'r0_logits': r0_logits,
+            'post_r_logits_seq': post_r_logits_seq,
+            'post_z_mean_seq': post_z_mean_seq,
+            'post_z_var_seq': post_z_var_seq,
+            'prior_r_logits_seq': prior_r_logits_seq,
+            'prior_z_mean_seq': prior_z_mean_seq,
+            'prior_z_var_seq': prior_z_var_seq,
+            'sampled_z_seq': sampled_z_seq,
+            'sampled_r_seq': sampled_r_seq,
+            'demand_mean': demand_mean,
+            'demand_var': demand_var,
+            'gen_mean': gen_mean,
+            'gen_var': gen_var
         }
 
 class SSMLoss(nn.Module):
-    def __init__(self, kl_weight=1.0, smooth_weight=0.1, wass_weight=0.1):
+    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1):
         super().__init__()
-        self.kl_weight = kl_weight
-        self.smooth_weight = smooth_weight
-        self.wass_weight = wass_weight
-        self.mse = nn.MSELoss(reduction='none')
+        self.kl_z_weight = kl_z_weight
+        self.kl_r_weight = kl_r_weight
+        self.entropy_weight = entropy_weight
         
-    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs):
-        """
-        model_outputs: dict from LatentSSM
-        targets: [batch, horizon, target_dim]
-        masks: [batch, horizon, target_dim]
-        demand_idx: slice or list of indices for demand targets
-        gen_idx: slice or list of indices for gen targets
-        """
-        pred_demand = model_outputs['pred_demand']
-        pred_gen = model_outputs['pred_gen']
+    def gaussian_nll(self, mean, var, target, mask):
+        # 0.5 * log(2 * pi * var) + (target - mean)^2 / (2 * var)
+        nll = 0.5 * torch.log(2 * torch.pi * var) + ((target - mean) ** 2) / (2 * var)
+        masked_nll = nll * mask
+        return masked_nll.sum() / (mask.sum() + 1e-8)
+        
+    def kl_divergence_gaussian(self, q_mu, q_var, p_mu, p_var):
+        # KL(q || p) = 0.5 * [log(p_var/q_var) + (q_var + (q_mu - p_mu)^2)/p_var - 1]
+        kl = 0.5 * (torch.log(p_var / q_var) + (q_var + (q_mu - p_mu)**2) / p_var - 1.0)
+        return kl.sum(dim=-1)
+        
+    def kl_divergence_categorical(self, q_logits, p_logits):
+        q_probs = F.softmax(q_logits, dim=-1)
+        q_log_probs = F.log_softmax(q_logits, dim=-1)
+        p_log_probs = F.log_softmax(p_logits, dim=-1)
+        kl = torch.sum(q_probs * (q_log_probs - p_log_probs), dim=-1)
+        return kl
+        
+    def entropy_categorical(self, logits):
+        probs = F.softmax(logits, dim=-1)
+        log_probs = F.log_softmax(logits, dim=-1)
+        entropy = -torch.sum(probs * log_probs, dim=-1)
+        return entropy
+        
+    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits=0.1):
+        demand_mean = model_outputs['demand_mean']
+        demand_var = model_outputs['demand_var']
+        gen_mean = model_outputs['gen_mean']
+        gen_var = model_outputs['gen_var']
         
         target_demand = targets[:, :, demand_idx]
         target_gen = targets[:, :, gen_idx]
@@ -148,49 +235,45 @@ class SSMLoss(nn.Module):
         mask_demand = masks[:, :, demand_idx]
         mask_gen = masks[:, :, gen_idx]
         
-        # 1. Reconstruction Loss (Masked)
-        mse_demand = (self.mse(pred_demand, target_demand) * mask_demand).sum() / (mask_demand.sum() + 1e-8)
-        mse_gen = (self.mse(pred_gen, target_gen) * mask_gen).sum() / (mask_gen.sum() + 1e-8)
+        # 1. NLL Emission Loss
+        nll_demand = self.gaussian_nll(demand_mean, demand_var, target_demand, mask_demand)
+        nll_gen = self.gaussian_nll(gen_mean, gen_var, target_gen, mask_gen)
+        recon_loss = nll_demand + nll_gen
         
-        # 1.5 1D Wasserstein Distance (Cumulative Sum L1 Loss)
-        # This penalizes predicting peaks at the wrong time much less than predicting the wrong total volume,
-        # encouraging the model to predict realistic spikes instead of smoothing them out.
-        pred_demand_cumsum = torch.cumsum(pred_demand * mask_demand, dim=1)
-        target_demand_cumsum = torch.cumsum(target_demand * mask_demand, dim=1)
-        wass_demand = torch.abs(pred_demand_cumsum - target_demand_cumsum).sum() / (mask_demand.sum() + 1e-8)
+        # 2. Latent Consistency (KL Divergence)
+        post_z_mean = model_outputs['post_z_mean_seq']
+        post_z_var = model_outputs['post_z_var_seq']
+        prior_z_mean = model_outputs['prior_z_mean_seq']
+        prior_z_var = model_outputs['prior_z_var_seq']
         
-        pred_gen_cumsum = torch.cumsum(pred_gen * mask_gen, dim=1)
-        target_gen_cumsum = torch.cumsum(target_gen * mask_gen, dim=1)
-        wass_gen = torch.abs(pred_gen_cumsum - target_gen_cumsum).sum() / (mask_gen.sum() + 1e-8)
+        post_r_logits = model_outputs['post_r_logits_seq']
+        prior_r_logits = model_outputs['prior_r_logits_seq']
         
-        loss_demand = mse_demand + self.wass_weight * wass_demand
-        loss_gen = mse_gen + self.wass_weight * wass_gen
+        kl_z = 0.0
+        kl_r = 0.0
+        entropy_r = 0.0
         
-        recon_loss = loss_demand + loss_gen
-        
-        # 2. KL Divergence for initial state (Standard Normal Prior)
-        # KL(q(z0 | x) || N(0, I))
-        mu = model_outputs['z0_mean']
-        logvar = model_outputs['z0_logvar']
-        kl_div = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1).mean()
-        
-        # KL Annealing
-        anneal_factor = min(1.0, epoch / (total_epochs * 0.5))
-        
-        # 3. Temporal Smoothness Penalty
-        # ||z_t - z_{t-1}||^2
-        z_seq = model_outputs['z_seq'] # [batch, horizon, latent_dim]
-        if z_seq.size(1) > 1:
-            z_diff = z_seq[:, 1:, :] - z_seq[:, :-1, :]
-            smoothness_loss = (z_diff ** 2).sum(dim=-1).mean()
-        else:
-            smoothness_loss = torch.tensor(0.0, device=z_seq.device)
+        if post_z_mean is not None:
+            # KL for continuous state
+            kl_z_raw = self.kl_divergence_gaussian(post_z_mean, post_z_var, prior_z_mean, prior_z_var)
+            kl_z = torch.clamp(kl_z_raw - free_bits, min=0.0).mean()
             
-        total_loss = recon_loss + (self.kl_weight * anneal_factor * kl_div) + (self.smooth_weight * smoothness_loss)
+            # KL for discrete regime
+            kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
+            kl_r = torch.clamp(kl_r_raw - free_bits, min=0.0).mean()
+            
+            # Entropy Regularization (Maximizing entropy of posterior to prevent regime collapse)
+            entropy_r = self.entropy_categorical(post_r_logits).mean()
+            
+        # KL Annealing
+        anneal_factor = min(1.0, epoch / (total_epochs * 0.3))
+        
+        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r
         
         return total_loss, {
-            'loss_demand': loss_demand.item(),
-            'loss_gen': loss_gen.item(),
-            'kl_div': kl_div.item(),
-            'smoothness': smoothness_loss.item()
+            'loss_demand': nll_demand.item(),
+            'loss_gen': nll_gen.item(),
+            'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
+            'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
+            'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r
         }

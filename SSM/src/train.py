@@ -64,16 +64,14 @@ def train():
     batch_size = 256
     latent_dim = 32
     hidden_dim = 64
+    num_regimes = 4
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
-    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos')]
+    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos') or c == 'is_bank_holiday']
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     
-    # Only include cols if they actually exist in feature_cols (safeguard)
     known_columns = weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
-    
-    # We need to compute known_dim dynamically based on the passed columns
     known_dim = len(known_columns)
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
@@ -96,24 +94,25 @@ def train():
         known_dim=known_dim,
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
+        num_regimes=num_regimes,
         dropout=0.2
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_weight=0.0, smooth_weight=0.05)
+    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1)
     
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
-    early_stopping = EarlyStopping(patience=8, min_delta=1e-4)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
+    early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
     
-    epochs = 50
+    epochs = 100 # increased epochs for complex H-SSM training
     
-    # DagsHub Auth (matches TFT train.py)
+    # DagsHub Auth
     os.environ["MLFLOW_TRACKING_USERNAME"] = "rgorasia19"
     os.environ["MLFLOW_TRACKING_PASSWORD"] = "26b84ad06cab16667533b56a5cebe4ebf27d8f9a"
     
     dagshub.init(repo_owner="rgorasia19", repo_name="Energy-Intelligence-System", mlflow=True)
     mlflow.set_tracking_uri("https://dagshub.com/rgorasia19/Energy-Intelligence-System.mlflow")
-    mlflow.set_experiment("ssm_long_horizon")
+    mlflow.set_experiment("hssm_probabilistic")
     
     with mlflow.start_run():
         mlflow.log_params({
@@ -121,6 +120,7 @@ def train():
             "horizon": horizon,
             "latent_dim": latent_dim,
             "hidden_dim": hidden_dim,
+            "num_regimes": num_regimes,
             "batch_size": batch_size,
             "learning_rate": 1e-3,
         })
@@ -128,19 +128,38 @@ def train():
         for epoch in range(epochs):
             model.train()
             train_loss = 0.0
-            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_div': 0, 'smoothness': 0}
+            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0}
             
+            # Rollout Curriculum: increase horizon progressively
+            if epoch < 10:
+                max_horizon = min(horizon, 8)
+            elif epoch < 20:
+                max_horizon = min(horizon, 15)
+            elif epoch < 30:
+                max_horizon = min(horizon, 22)
+            else:
+                max_horizon = horizon
+                
             for batch in train_loader:
                 enc_inputs = batch['encoder_inputs'].to(device)
                 dec_inputs = batch['decoder_inputs'].to(device)
                 dec_targets = batch['decoder_targets'].to(device)
                 dec_masks = batch['decoder_mask'].to(device)
                 
+                # Variable random lengths to prevent horizon-specific overfitting
+                current_horizon = torch.randint(8, max_horizon + 1, (1,)).item()
+                
+                dec_inputs_trunc = dec_inputs[:, :current_horizon, :]
+                dec_targets_trunc = dec_targets[:, :current_horizon, :]
+                dec_masks_trunc = dec_masks[:, :current_horizon, :]
+                
                 optimizer.zero_grad(set_to_none=True)
                 
-                outputs = model(enc_inputs, dec_inputs, horizon)
+                tau = max(0.5, 1.0 - epoch / (epochs * 0.5))
                 
-                loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epoch, epochs)
+                outputs = model(enc_inputs, dec_inputs_trunc, current_horizon, target_seq=dec_targets_trunc, tau=tau)
+                
+                loss, metrics = criterion(outputs, dec_targets_trunc, dec_masks_trunc, demand_idx, gen_idx, epoch, epochs, free_bits=0.1)
                 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -156,7 +175,7 @@ def train():
             
             model.eval()
             val_loss = 0.0
-            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_div': 0, 'smoothness': 0}
+            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0}
             
             with torch.no_grad():
                 for batch in val_loader:
@@ -165,10 +184,9 @@ def train():
                     dec_targets = batch['decoder_targets'].to(device)
                     dec_masks = batch['decoder_mask'].to(device)
                     
-                    outputs = model(enc_inputs, dec_inputs, horizon)
+                    outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, tau=1.0)
                     
-                    # For validation, act as if it's the final epoch to fully evaluate un-annealed KL
-                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs)
+                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs, free_bits=0.0)
                     
                     val_loss += loss.item()
                     for k in val_metrics_sum:
@@ -180,14 +198,16 @@ def train():
             
             scheduler.step(val_loss)
             
-            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand: {val_metrics_sum['loss_demand']:.4f}, Gen: {val_metrics_sum['loss_gen']:.4f})")
+            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand NLL: {val_metrics_sum['loss_demand']:.4f})")
             
             mlflow.log_metrics({
                 "train_loss": train_loss,
                 "val_loss": val_loss,
-                "val_demand_loss": val_metrics_sum['loss_demand'],
-                "val_gen_loss": val_metrics_sum['loss_gen'],
-                "val_kl_div": val_metrics_sum['kl_div']
+                "val_demand_nll": val_metrics_sum['loss_demand'],
+                "val_gen_nll": val_metrics_sum['loss_gen'],
+                "train_kl_z": train_metrics_sum['kl_z'],
+                "train_kl_r": train_metrics_sum['kl_r'],
+                "train_entropy_r": train_metrics_sum['entropy_r']
             }, step=epoch)
             
             early_stopping(val_loss)
