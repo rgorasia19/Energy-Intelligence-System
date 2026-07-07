@@ -58,7 +58,7 @@ def evaluate():
     
     seq_len = 60
     horizon = 30
-    latent_dim = 16
+    latent_dim = 32
     hidden_dim = 64
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
@@ -191,12 +191,14 @@ def evaluate():
     sample_dec_inputs = test_dataset[0]['decoder_inputs'].unsqueeze(0).to(device)
     sample_true_demand = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy() # First demand target (e.g., ND)
     
-    # model.train() # Enable process noise sampling - REMOVED: dropout caused divergence
-    mc_passes = 100
-    mc_preds = []
+    print("Generating Monte Carlo Fan Chart...")
+    mc_samples = 100
+    model.eval() # Keep eval mode to avoid dropout train/test scale mismatch
     
+    mc_preds = []
     with torch.no_grad():
-        for _ in range(mc_passes):
+        for _ in range(mc_samples):
+            # Pass sample=True to explicitly activate process noise without dropout
             out = model(sample_enc_inputs, sample_dec_inputs, horizon, sample=True)
             # Take the first demand output
             mc_preds.append(out['pred_demand'][0, :, 0].cpu().numpy())

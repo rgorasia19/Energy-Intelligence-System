@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=8, hidden_dim=64, dropout=0.2):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=4, latent_dim=32, hidden_dim=64, dropout=0.2):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
@@ -124,10 +124,11 @@ class LatentSSM(nn.Module):
         }
 
 class SSMLoss(nn.Module):
-    def __init__(self, kl_weight=1.0, smooth_weight=0.1):
+    def __init__(self, kl_weight=1.0, smooth_weight=0.1, wass_weight=0.1):
         super().__init__()
         self.kl_weight = kl_weight
         self.smooth_weight = smooth_weight
+        self.wass_weight = wass_weight
         self.mse = nn.MSELoss(reduction='none')
         
     def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs):
@@ -148,8 +149,22 @@ class SSMLoss(nn.Module):
         mask_gen = masks[:, :, gen_idx]
         
         # 1. Reconstruction Loss (Masked)
-        loss_demand = (self.mse(pred_demand, target_demand) * mask_demand).sum() / (mask_demand.sum() + 1e-8)
-        loss_gen = (self.mse(pred_gen, target_gen) * mask_gen).sum() / (mask_gen.sum() + 1e-8)
+        mse_demand = (self.mse(pred_demand, target_demand) * mask_demand).sum() / (mask_demand.sum() + 1e-8)
+        mse_gen = (self.mse(pred_gen, target_gen) * mask_gen).sum() / (mask_gen.sum() + 1e-8)
+        
+        # 1.5 1D Wasserstein Distance (Cumulative Sum L1 Loss)
+        # This penalizes predicting peaks at the wrong time much less than predicting the wrong total volume,
+        # encouraging the model to predict realistic spikes instead of smoothing them out.
+        pred_demand_cumsum = torch.cumsum(pred_demand * mask_demand, dim=1)
+        target_demand_cumsum = torch.cumsum(target_demand * mask_demand, dim=1)
+        wass_demand = torch.abs(pred_demand_cumsum - target_demand_cumsum).sum() / (mask_demand.sum() + 1e-8)
+        
+        pred_gen_cumsum = torch.cumsum(pred_gen * mask_gen, dim=1)
+        target_gen_cumsum = torch.cumsum(target_gen * mask_gen, dim=1)
+        wass_gen = torch.abs(pred_gen_cumsum - target_gen_cumsum).sum() / (mask_gen.sum() + 1e-8)
+        
+        loss_demand = mse_demand + self.wass_weight * wass_demand
+        loss_gen = mse_gen + self.wass_weight * wass_gen
         
         recon_loss = loss_demand + loss_gen
         
