@@ -30,9 +30,9 @@ class LatentSSM(nn.Module):
         self.prior_logvar = nn.Parameter(torch.zeros(1, latent_dim))
         
         # 3. Emission Model (Decoder)
-        # Maps z_t + calendar features to observations
+        # Maps z_t + z_0 + calendar features to observations
         self.emission_shared = nn.Sequential(
-            nn.Linear(latent_dim + known_dim, hidden_dim),
+            nn.Linear(2 * latent_dim + known_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, hidden_dim),
@@ -71,13 +71,14 @@ class LatentSSM(nn.Module):
         z_next_mean = (1 - gate) * z_prev + gate * f_z
         return z_next_mean
         
-    def emit(self, z, decoder_inputs):
+    def emit(self, z, z0_seq, decoder_inputs):
         """
         Maps latent state sequence + known futures to predictions.
         z: [batch, horizon, latent_dim]
+        z0_seq: [batch, horizon, latent_dim]
         decoder_inputs: [batch, horizon, known_dim]
         """
-        emission_input = torch.cat([z, decoder_inputs], dim=-1)
+        emission_input = torch.cat([z, z0_seq, decoder_inputs], dim=-1)
         shared_features = self.emission_shared(emission_input)
         pred_demand = self.demand_head(shared_features)
         pred_gen = self.gen_head(shared_features)
@@ -111,7 +112,8 @@ class LatentSSM(nn.Module):
         z_seq = torch.stack(z_seq, dim=1) # [batch, horizon, latent_dim]
         
         # 3. Emit predictions
-        pred_demand, pred_gen = self.emit(z_seq, decoder_inputs)
+        z0_seq = z0.unsqueeze(1).expand(-1, horizon, -1)
+        pred_demand, pred_gen = self.emit(z_seq, z0_seq, decoder_inputs)
         
         return {
             'z0_mean': z0_mean,
