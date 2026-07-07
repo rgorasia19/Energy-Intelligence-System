@@ -20,7 +20,7 @@ class LatentSSM(nn.Module):
         # Gated residual dynamics: z_t = z_{t-1} + sigma(W z_{t-1}) * f(z_{t-1}) + eps
         self.f_net = nn.Sequential(
             nn.Linear(latent_dim, hidden_dim),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(hidden_dim, latent_dim)
         )
         self.gate_net = nn.Linear(latent_dim, latent_dim)
