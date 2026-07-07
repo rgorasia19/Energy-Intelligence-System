@@ -67,7 +67,7 @@ def evaluate():
     
     seq_len = 60
     horizon = 30
-    latent_dim = 32
+    latent_dim = 16
     hidden_dim = 64
     num_regimes = 4
     
@@ -205,7 +205,7 @@ def evaluate():
     sample_true = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy()
     
     with torch.no_grad():
-        out = model(sample_enc, sample_dec, horizon, sample=False, tau=1.0)
+        out = model(sample_enc, sample_dec, horizon, sample=False, tau=0.5)
         mean = out['demand_mean'][0, :, 0].cpu().numpy()
         var = out['demand_var'][0, :, 0].cpu().numpy()
         std = np.sqrt(var)

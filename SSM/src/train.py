@@ -62,7 +62,7 @@ def train():
     seq_len = 60
     horizon = 30
     batch_size = 256
-    latent_dim = 32
+    latent_dim = 16
     hidden_dim = 64
     num_regimes = 4
 
@@ -99,7 +99,7 @@ def train():
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1)
+    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=1.0)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
@@ -155,11 +155,11 @@ def train():
                 
                 optimizer.zero_grad(set_to_none=True)
                 
-                tau = max(0.5, 1.0 - epoch / (epochs * 0.5))
+                tau = max(0.5, 2.0 - 1.5 * (epoch / epochs))
                 
                 outputs = model(enc_inputs, dec_inputs_trunc, current_horizon, target_seq=dec_targets_trunc, tau=tau)
                 
-                loss, metrics = criterion(outputs, dec_targets_trunc, dec_masks_trunc, demand_idx, gen_idx, epoch, epochs, free_bits=0.1)
+                loss, metrics = criterion(outputs, dec_targets_trunc, dec_masks_trunc, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.1, free_bits_r=1.0)
                 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -184,9 +184,9 @@ def train():
                     dec_targets = batch['decoder_targets'].to(device)
                     dec_masks = batch['decoder_mask'].to(device)
                     
-                    outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, tau=1.0)
+                    outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, tau=0.5) # use 0.5 in eval for harder choices
                     
-                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs, free_bits=0.0)
+                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs, free_bits_z=0.0, free_bits_r=0.0)
                     
                     val_loss += loss.item()
                     for k in val_metrics_sum:

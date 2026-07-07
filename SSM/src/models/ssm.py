@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=32, hidden_dim=64, num_regimes=4, dropout=0.2):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=16, hidden_dim=64, num_regimes=4, dropout=0.2):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
@@ -35,11 +35,14 @@ class LatentSSM(nn.Module):
         )
         
         # Continuous transition: p(z_t | z_{t-1}, r_t, u_t)
-        self.prior_z_net = nn.Sequential(
-            nn.Linear(latent_dim + num_regimes + known_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var
-        )
+        # Mixture of Experts: K separate transition networks
+        self.prior_z_experts = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(latent_dim + known_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var
+            ) for _ in range(num_regimes)
+        ])
         
         # 4. Probabilistic Emission
         self.emit_shared = nn.Sequential(
@@ -131,9 +134,19 @@ class LatentSSM(nn.Module):
             else:
                 r_next = F.one_hot(torch.argmax(r_logits_t, dim=-1), num_classes=self.num_regimes).float()
                 
-            # Prior Continuous Transition
-            z_prior_input = torch.cat([z_curr, r_next, u_t], dim=-1)
-            z_out = self.prior_z_net(z_prior_input)
+            # Prior Continuous Transition (Mixture of Experts)
+            # z_curr: [batch, latent_dim], u_t: [batch, known_dim], r_next: [batch, num_regimes]
+            z_prior_input = torch.cat([z_curr, u_t], dim=-1)
+            
+            # Compute outputs for all K experts
+            expert_outputs = []
+            for k in range(self.num_regimes):
+                expert_outputs.append(self.prior_z_experts[k](z_prior_input)) # Each: [batch, latent_dim * 2]
+            expert_outputs = torch.stack(expert_outputs, dim=1) # [batch, num_regimes, latent_dim * 2]
+            
+            # Weighted sum over experts using Gumbel-Softmax r_next
+            z_out = torch.einsum('bk,bkd->bd', r_next, expert_outputs)
+            
             z_mean, z_raw_var = torch.split(z_out, self.latent_dim, dim=-1)
             z_var = self._get_var(z_raw_var)
             
@@ -223,7 +236,7 @@ class SSMLoss(nn.Module):
         entropy = -torch.sum(probs * log_probs, dim=-1)
         return entropy
         
-    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits=0.1):
+    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits_z=0.1, free_bits_r=1.0):
         demand_mean = model_outputs['demand_mean']
         demand_var = model_outputs['demand_var']
         gen_mean = model_outputs['gen_mean']
@@ -256,11 +269,11 @@ class SSMLoss(nn.Module):
         if post_z_mean is not None:
             # KL for continuous state
             kl_z_raw = self.kl_divergence_gaussian(post_z_mean, post_z_var, prior_z_mean, prior_z_var)
-            kl_z = torch.clamp(kl_z_raw - free_bits, min=0.0).mean()
+            kl_z = torch.clamp(kl_z_raw - free_bits_z, min=0.0).mean()
             
             # KL for discrete regime
             kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
-            kl_r = torch.clamp(kl_r_raw - free_bits, min=0.0).mean()
+            kl_r = torch.clamp(kl_r_raw - free_bits_r, min=0.0).mean()
             
             # Entropy Regularization (Maximizing entropy of posterior to prevent regime collapse)
             entropy_r = self.entropy_categorical(post_r_logits).mean()
