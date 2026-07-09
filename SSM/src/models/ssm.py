@@ -313,8 +313,8 @@ class SSMLoss(nn.Module):
         total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r
         
         return total_loss, {
-            'loss_demand': nll_demand.item(),
-            'loss_gen': nll_gen.item(),
+            'loss_demand': loss_demand_per_item.mean().item(),
+            'loss_gen': loss_gen_per_item.mean().item(),
             'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r
