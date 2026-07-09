@@ -114,6 +114,8 @@ def evaluate():
     all_true_gen = []
     all_mask_gen = []
     
+    all_z_seq = []
+    all_r_seq = []
     all_demand_pit = []
     
     with torch.no_grad():
