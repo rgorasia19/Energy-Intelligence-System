@@ -45,7 +45,16 @@ class LatentSSM(nn.Module):
         ])
         
         # 4. Probabilistic Emission
-        self.emit_shared = nn.Linear(latent_dim + known_dim, hidden_dim) # no r_t here to force z_t to carry the state
+        self.emit_demand = nn.Sequential(
+            nn.Linear(latent_dim + known_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
+        self.emit_gen = nn.Sequential(
+            nn.Linear(latent_dim + known_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
         
         self.demand_mean = nn.Linear(hidden_dim, demand_dim)
         self.demand_raw_var = nn.Linear(hidden_dim, demand_dim)
@@ -114,7 +123,7 @@ class LatentSSM(nn.Module):
             # Prior Regime Transition
             r_prior_input = torch.cat([z_curr, r_curr, u_t], dim=-1)
             r_logits = self.prior_r_net(r_prior_input)
-            r_logits = r_logits + r_curr # Residual connection for persistence
+            r_logits = r_logits + 10.0 * r_curr # Strong residual connection for persistence
             prior_r_logits_seq.append(r_logits)
             
             if self.training and target_seq is not None:
@@ -173,13 +182,14 @@ class LatentSSM(nn.Module):
         
         # 4. Probabilistic Emission
         emit_input = torch.cat([sampled_z_seq, decoder_inputs], dim=-1)
-        shared_features = self.emit_shared(emit_input)
         
-        demand_mean = self.demand_mean(shared_features)
-        demand_var = self._get_var(self.demand_raw_var(shared_features))
+        demand_features = self.emit_demand(emit_input)
+        demand_mean = self.demand_mean(demand_features)
+        demand_var = self._get_var(self.demand_raw_var(demand_features))
         
-        gen_mean = self.gen_mean(shared_features)
-        gen_var = self._get_var(self.gen_raw_var(shared_features))
+        gen_features = self.emit_gen(emit_input)
+        gen_mean = self.gen_mean(gen_features)
+        gen_var = self._get_var(self.gen_raw_var(gen_features))
         
         return {
             'z0_mean': z0_mean,
@@ -206,21 +216,7 @@ class SSMLoss(nn.Module):
         self.kl_r_weight = kl_r_weight
         self.entropy_weight = entropy_weight
         
-    def student_t_nll(self, mean, var, target, mask, df=3.0):
-        # NLL of Student-T distribution
-        nll = 0.5 * torch.log(var) + ((df + 1.0) / 2.0) * torch.log(1.0 + ((target - mean) ** 2) / (df * var))
-        masked_nll = nll * mask
-        return masked_nll.sum() / (mask.sum() + 1e-8)
-        
-    def crps_approx(self, mean, var, target, mask):
-        std = torch.sqrt(var)
-        z = (target - mean) / (std + 1e-8)
-        normal = torch.distributions.Normal(0, 1)
-        cdf = normal.cdf(z)
-        pdf = torch.exp(normal.log_prob(z))
-        crps = std * (z * (2 * cdf - 1) + 2 * pdf - 1 / torch.sqrt(torch.tensor(torch.pi)))
-        masked_crps = crps * mask
-        return masked_crps.sum() / (mask.sum() + 1e-8)
+
         
     def kl_divergence_gaussian(self, q_mu, q_var, p_mu, p_var):
         # KL(q || p) = 0.5 * [log(p_var/q_var) + (q_var + (q_mu - p_mu)^2)/p_var - 1]
@@ -240,7 +236,7 @@ class SSMLoss(nn.Module):
         entropy = -torch.sum(probs * log_probs, dim=-1)
         return entropy
         
-    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits_z=0.1, free_bits_r=1.0):
+    def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits_z=0.1, free_bits_r=1.0, k_samples=1):
         demand_mean = model_outputs['demand_mean']
         demand_var = model_outputs['demand_var']
         gen_mean = model_outputs['gen_mean']
@@ -252,14 +248,39 @@ class SSMLoss(nn.Module):
         mask_demand = masks[:, :, demand_idx]
         mask_gen = masks[:, :, gen_idx]
         
-        # 1. NLL + CRPS Emission Loss
-        nll_demand = self.student_t_nll(demand_mean, demand_var, target_demand, mask_demand)
-        nll_gen = self.student_t_nll(gen_mean, gen_var, target_gen, mask_gen)
+        # Calculate per-item NLL and CRPS
+        def calc_per_item_loss(mean, var, target, mask, is_demand):
+            nll = 0.5 * torch.log(var) + (4.0 / 2.0) * torch.log(1.0 + ((target - mean) ** 2) / (3.0 * var))
+            std = torch.sqrt(var)
+            z = (target - mean) / (std + 1e-8)
+            normal = torch.distributions.Normal(0, 1)
+            crps = std * (z * (2 * normal.cdf(z) - 1) + 2 * torch.exp(normal.log_prob(z)) - 1 / torch.sqrt(torch.tensor(torch.pi)))
+            
+            combined = (nll + crps) * mask
+            per_item = combined.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
+            
+            # Variance penalty
+            var_penalty = -0.1 * torch.log(var) * mask
+            per_item += var_penalty.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
+            
+            return per_item
+            
+        loss_demand_per_item = calc_per_item_loss(demand_mean, demand_var, target_demand, mask_demand, True)
+        loss_gen_per_item = calc_per_item_loss(gen_mean, gen_var, target_gen, mask_gen, False)
         
-        crps_demand = self.crps_approx(demand_mean, demand_var, target_demand, mask_demand)
-        crps_gen = self.crps_approx(gen_mean, gen_var, target_gen, mask_gen)
+        total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
-        recon_loss = nll_demand + nll_gen + crps_demand + crps_gen
+        if k_samples > 1:
+            # Reshape to [batch, K]
+            batch_size = total_recon_per_item.size(0) // k_samples
+            recon_reshaped = total_recon_per_item.view(batch_size, k_samples)
+            # Log-Mean-Exp over K samples (IWAE objective)
+            # L = -log( 1/K sum(exp(-L_k)) )
+            import math
+            recon_loss = -torch.logsumexp(-recon_reshaped, dim=1) + math.log(k_samples)
+            recon_loss = recon_loss.mean()
+        else:
+            recon_loss = total_recon_per_item.mean()
         
         # 2. Latent Consistency (KL Divergence)
         post_z_mean = model_outputs['post_z_mean_seq']

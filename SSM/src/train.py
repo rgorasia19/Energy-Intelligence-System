@@ -173,7 +173,7 @@ def train():
                 
                 outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau)
                 
-                loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.5, free_bits_r=1.0)
+                loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.5, free_bits_r=1.0, k_samples=K)
                 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)

@@ -114,8 +114,7 @@ def evaluate():
     all_true_gen = []
     all_mask_gen = []
     
-    all_z_seq = []
-    all_r_seq = []
+    all_demand_pit = []
     
     with torch.no_grad():
         for batch in test_loader:
@@ -124,14 +123,38 @@ def evaluate():
             dec_targets = batch['decoder_targets'].numpy()
             dec_masks = batch['decoder_mask'].numpy()
             
-            outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=False, tau=1.0)
+            N = 50
+            batch_demand_samples = []
+            batch_gen_samples = []
             
-            demand_mean = outputs['demand_mean'].cpu().numpy()
-            demand_var = outputs['demand_var'].cpu().numpy()
-            gen_mean = outputs['gen_mean'].cpu().numpy()
-            gen_var = outputs['gen_var'].cpu().numpy()
-            z_seq = outputs['sampled_z_seq'].cpu().numpy()
-            r_seq = outputs['sampled_r_seq'].cpu().numpy() # [batch, horizon, num_regimes]
+            for _ in range(N):
+                outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=True, tau=1.0)
+                
+                d_mean = outputs['demand_mean'].cpu().numpy()
+                d_var = outputs['demand_var'].cpu().numpy()
+                g_mean = outputs['gen_mean'].cpu().numpy()
+                g_var = outputs['gen_var'].cpu().numpy()
+                
+                d_sample = np.random.normal(loc=d_mean, scale=np.sqrt(d_var))
+                g_sample = np.random.normal(loc=g_mean, scale=np.sqrt(g_var))
+                
+                batch_demand_samples.append(d_sample)
+                batch_gen_samples.append(g_sample)
+                
+            batch_demand_samples = np.stack(batch_demand_samples, axis=1) # [batch, N, horizon, dim]
+            batch_gen_samples = np.stack(batch_gen_samples, axis=1)
+            
+            # Empirical mean and variance
+            demand_mean = np.mean(batch_demand_samples, axis=1)
+            demand_var = np.var(batch_demand_samples, axis=1) + 1e-6
+            gen_mean = np.mean(batch_gen_samples, axis=1)
+            gen_var = np.var(batch_gen_samples, axis=1) + 1e-6
+            
+            # Compute PIT for demand
+            # True target needs to be broadcasted to [batch, 1, horizon, dim]
+            t_demand = dec_targets[:, np.newaxis, :, demand_idx]
+            pit = np.mean(batch_demand_samples < t_demand, axis=1)
+            all_demand_pit.append(pit)
             
             all_demand_mean.append(demand_mean)
             all_demand_var.append(demand_var)
@@ -143,8 +166,9 @@ def evaluate():
             all_true_gen.append(dec_targets[:, :, gen_idx])
             all_mask_gen.append(dec_masks[:, :, gen_idx])
             
-            all_z_seq.append(z_seq)
-            all_r_seq.append(r_seq)
+            # For simplicity, just append the last r_seq
+            all_z_seq.append(outputs['sampled_z_seq'].cpu().numpy())
+            all_r_seq.append(outputs['sampled_r_seq'].cpu().numpy())
             
     # Concatenate all batches
     demand_mean = np.concatenate(all_demand_mean, axis=0)
@@ -205,20 +229,32 @@ def evaluate():
     sample_true = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy()
     
     with torch.no_grad():
-        out = model(sample_enc, sample_dec, horizon, sample=False, tau=0.5)
-        mean = out['demand_mean'][0, :, 0].cpu().numpy()
-        var = out['demand_var'][0, :, 0].cpu().numpy()
-        std = np.sqrt(var)
+        N = 100
+        samples = []
+        r_outs = []
+        for _ in range(N):
+            out = model(sample_enc, sample_dec, horizon, sample=True, tau=0.5)
+            mean = out['demand_mean'][0, :, 0].cpu().numpy()
+            var = out['demand_var'][0, :, 0].cpu().numpy()
+            std = np.sqrt(var)
+            emissions = np.random.normal(loc=mean, scale=std)
+            samples.append(emissions)
+            r_outs.append(np.argmax(out['sampled_r_seq'][0].cpu().numpy(), axis=-1))
+            
+        samples = np.array(samples)
+        p10 = np.percentile(samples, 10, axis=0)
+        p90 = np.percentile(samples, 90, axis=0)
+        mean_forecast = np.mean(samples, axis=0)
         
-        r_out = np.argmax(out['sampled_r_seq'][0].cpu().numpy(), axis=-1)
-        
-    p10 = mean - 1.28 * std
-    p90 = mean + 1.28 * std
+        # Mode regime
+        r_outs = np.array(r_outs)
+        r_out, _ = stats.mode(r_outs, axis=0)
+        r_out = r_out.flatten() if hasattr(r_out, 'flatten') else (r_out[0] if isinstance(r_out, tuple) else np.array(r_out).flatten())
     
     plt.figure(figsize=(12, 6))
     time_axis = np.arange(horizon)
     plt.plot(time_axis, sample_true, color='black', label='Actual', marker='o', linewidth=2)
-    plt.plot(time_axis, mean, color='blue', label='Mean Forecast')
+    plt.plot(time_axis, mean_forecast, color='blue', label='Mean Forecast')
     plt.fill_between(time_axis, p10, p90, color='blue', alpha=0.2, label='10th-90th Percentile')
     
     # Add regime colors
@@ -231,6 +267,18 @@ def evaluate():
     plt.ylabel("Scaled Demand")
     plt.legend()
     plt.savefig(f"eval_fan_chart_{short_run_id}.png", bbox_inches='tight')
+    plt.close()
+    
+    print("Generating PIT Histogram...")
+    plt.figure(figsize=(8, 6))
+    pit_flat = np.concatenate(all_demand_pit, axis=0)[mask_demand == 1]
+    plt.hist(pit_flat, bins=20, density=True, alpha=0.7, color='purple', edgecolor='black')
+    plt.axhline(1.0, color='r', linestyle='--', label='Ideal Uniform')
+    plt.title("Probability Integral Transform (PIT) Histogram - Demand")
+    plt.xlabel("PIT Value")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.savefig(f"eval_pit_hist_{short_run_id}.png", bbox_inches='tight')
     plt.close()
 
     print("Evaluation complete.")
