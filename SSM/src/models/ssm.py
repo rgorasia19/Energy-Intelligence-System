@@ -45,14 +45,7 @@ class LatentSSM(nn.Module):
         ])
         
         # 4. Probabilistic Emission
-        self.emit_shared = nn.Sequential(
-            nn.Linear(latent_dim + known_dim, hidden_dim), # no r_t here to force z_t to carry the state
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout)
-        )
+        self.emit_shared = nn.Linear(latent_dim + known_dim, hidden_dim) # no r_t here to force z_t to carry the state
         
         self.demand_mean = nn.Linear(hidden_dim, demand_dim)
         self.demand_raw_var = nn.Linear(hidden_dim, demand_dim)
@@ -61,7 +54,7 @@ class LatentSSM(nn.Module):
         
     def _get_var(self, raw_var):
         # Softplus with variance floor to prevent deterministic collapse
-        return F.softplus(raw_var) + 1e-4
+        return torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
         
     def reparameterize_gaussian(self, mu, var):
         std = torch.sqrt(var)
@@ -121,6 +114,7 @@ class LatentSSM(nn.Module):
             # Prior Regime Transition
             r_prior_input = torch.cat([z_curr, r_curr, u_t], dim=-1)
             r_logits = self.prior_r_net(r_prior_input)
+            r_logits = r_logits + r_curr # Residual connection for persistence
             prior_r_logits_seq.append(r_logits)
             
             if self.training and target_seq is not None:
@@ -212,11 +206,21 @@ class SSMLoss(nn.Module):
         self.kl_r_weight = kl_r_weight
         self.entropy_weight = entropy_weight
         
-    def gaussian_nll(self, mean, var, target, mask):
-        # 0.5 * log(2 * pi * var) + (target - mean)^2 / (2 * var)
-        nll = 0.5 * torch.log(2 * torch.pi * var) + ((target - mean) ** 2) / (2 * var)
+    def student_t_nll(self, mean, var, target, mask, df=3.0):
+        # NLL of Student-T distribution
+        nll = 0.5 * torch.log(var) + ((df + 1.0) / 2.0) * torch.log(1.0 + ((target - mean) ** 2) / (df * var))
         masked_nll = nll * mask
         return masked_nll.sum() / (mask.sum() + 1e-8)
+        
+    def crps_approx(self, mean, var, target, mask):
+        std = torch.sqrt(var)
+        z = (target - mean) / (std + 1e-8)
+        normal = torch.distributions.Normal(0, 1)
+        cdf = normal.cdf(z)
+        pdf = torch.exp(normal.log_prob(z))
+        crps = std * (z * (2 * cdf - 1) + 2 * pdf - 1 / torch.sqrt(torch.tensor(torch.pi)))
+        masked_crps = crps * mask
+        return masked_crps.sum() / (mask.sum() + 1e-8)
         
     def kl_divergence_gaussian(self, q_mu, q_var, p_mu, p_var):
         # KL(q || p) = 0.5 * [log(p_var/q_var) + (q_var + (q_mu - p_mu)^2)/p_var - 1]
@@ -248,10 +252,14 @@ class SSMLoss(nn.Module):
         mask_demand = masks[:, :, demand_idx]
         mask_gen = masks[:, :, gen_idx]
         
-        # 1. NLL Emission Loss
-        nll_demand = self.gaussian_nll(demand_mean, demand_var, target_demand, mask_demand)
-        nll_gen = self.gaussian_nll(gen_mean, gen_var, target_gen, mask_gen)
-        recon_loss = nll_demand + nll_gen
+        # 1. NLL + CRPS Emission Loss
+        nll_demand = self.student_t_nll(demand_mean, demand_var, target_demand, mask_demand)
+        nll_gen = self.student_t_nll(gen_mean, gen_var, target_gen, mask_gen)
+        
+        crps_demand = self.crps_approx(demand_mean, demand_var, target_demand, mask_demand)
+        crps_gen = self.crps_approx(gen_mean, gen_var, target_gen, mask_gen)
+        
+        recon_loss = nll_demand + nll_gen + crps_demand + crps_gen
         
         # 2. Latent Consistency (KL Divergence)
         post_z_mean = model_outputs['post_z_mean_seq']
@@ -279,7 +287,7 @@ class SSMLoss(nn.Module):
             entropy_r = self.entropy_categorical(post_r_logits).mean()
             
         # KL Annealing
-        anneal_factor = min(1.0, epoch / (total_epochs * 0.3))
+        anneal_factor = min(1.0, epoch / (total_epochs * 0.5))
         
         total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r
         

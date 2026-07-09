@@ -99,7 +99,7 @@ def train():
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=1.0)
+    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
@@ -146,6 +146,14 @@ def train():
                 dec_targets = batch['decoder_targets'].to(device)
                 dec_masks = batch['decoder_mask'].to(device)
                 
+                # Noise Injection and Shocks
+                enc_inputs = enc_inputs + torch.randn_like(enc_inputs) * 0.05
+                dec_inputs = dec_inputs + torch.randn_like(dec_inputs) * 0.05
+                
+                if torch.rand(1).item() < 0.05:
+                    shock = torch.empty(dec_targets.shape[0], 1, 1, device=device).uniform_(1.2, 2.0)
+                    dec_targets = dec_targets * shock
+                
                 # Variable random lengths to prevent horizon-specific overfitting
                 current_horizon = torch.randint(8, max_horizon + 1, (1,)).item()
                 
@@ -155,11 +163,17 @@ def train():
                 
                 optimizer.zero_grad(set_to_none=True)
                 
-                tau = max(0.5, 2.0 - 1.5 * (epoch / epochs))
+                tau = max(0.5, 2.0 * (0.95 ** epoch))
                 
-                outputs = model(enc_inputs, dec_inputs_trunc, current_horizon, target_seq=dec_targets_trunc, tau=tau)
+                K = 5
+                enc_inputs_k = enc_inputs.repeat_interleave(K, dim=0)
+                dec_inputs_trunc_k = dec_inputs_trunc.repeat_interleave(K, dim=0)
+                dec_targets_trunc_k = dec_targets_trunc.repeat_interleave(K, dim=0)
+                dec_masks_trunc_k = dec_masks_trunc.repeat_interleave(K, dim=0)
                 
-                loss, metrics = criterion(outputs, dec_targets_trunc, dec_masks_trunc, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.1, free_bits_r=1.0)
+                outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau)
+                
+                loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.5, free_bits_r=1.0)
                 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
