@@ -11,6 +11,9 @@ class LatentSSM(nn.Module):
         self.known_dim = known_dim
         self.num_regimes = num_regimes
         
+        # Learnable variance scaling parameter (alpha) initialized to 2.0 (ln(2) approx 0.693)
+        self.log_alpha = nn.Parameter(torch.tensor([0.693]))
+        
         # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
         self.z0_mean = nn.Linear(hidden_dim, latent_dim)
@@ -62,8 +65,9 @@ class LatentSSM(nn.Module):
         self.gen_raw_var = nn.Linear(hidden_dim, gen_dim)
         
     def _get_var(self, raw_var):
-        # Softplus with variance floor to prevent deterministic collapse
-        return torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
+        # Softplus with variance floor to prevent deterministic collapse, scaled by learned alpha
+        base_var = torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
+        return torch.exp(self.log_alpha) * base_var
         
     def reparameterize_gaussian(self, mu, var):
         std = torch.sqrt(var)
@@ -265,8 +269,21 @@ class SSMLoss(nn.Module):
             
             return per_item
             
+        def calc_coverage_penalty(mean, var, target, mask):
+            std = torch.sqrt(var)
+            lower = mean - 1.645 * std
+            upper = mean + 1.645 * std
+            scale = 10.0
+            coverage_approx = torch.sigmoid(scale * (target - lower)) * torch.sigmoid(scale * (upper - target))
+            coverage = (coverage_approx * mask).sum() / (mask.sum() + 1e-8)
+            return (0.9 - coverage) ** 2
+            
         loss_demand_per_item = calc_per_item_loss(demand_mean, demand_var, target_demand, mask_demand, True)
         loss_gen_per_item = calc_per_item_loss(gen_mean, gen_var, target_gen, mask_gen, False)
+        
+        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
+        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
+        coverage_loss = 10.0 * (coverage_demand + coverage_gen)
         
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
@@ -274,13 +291,13 @@ class SSMLoss(nn.Module):
             # Reshape to [batch, K]
             batch_size = total_recon_per_item.size(0) // k_samples
             recon_reshaped = total_recon_per_item.view(batch_size, k_samples)
-            # Log-Mean-Exp over K samples (IWAE objective)
-            # L = -log( 1/K sum(exp(-L_k)) )
             import math
             recon_loss = -torch.logsumexp(-recon_reshaped, dim=1) + math.log(k_samples)
             recon_loss = recon_loss.mean()
         else:
             recon_loss = total_recon_per_item.mean()
+            
+        recon_loss = recon_loss + coverage_loss
         
         # 2. Latent Consistency (KL Divergence)
         post_z_mean = model_outputs['post_z_mean_seq']
@@ -294,6 +311,8 @@ class SSMLoss(nn.Module):
         kl_z = 0.0
         kl_r = 0.0
         entropy_r = 0.0
+        mi_loss = 0.0
+        util_loss = 0.0
         
         if post_z_mean is not None:
             # KL for continuous state
@@ -304,18 +323,40 @@ class SSMLoss(nn.Module):
             kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
             kl_r = torch.clamp(kl_r_raw - free_bits_r, min=0.0).mean()
             
-            # Entropy Regularization (Maximizing entropy of posterior to prevent regime collapse)
+            # Entropy Regularization
             entropy_r = self.entropy_categorical(post_r_logits).mean()
             
+            # Mutual Information & Utilization
+            q_r = F.softmax(post_r_logits, dim=-1)
+            num_regimes = q_r.size(-1)
+            q_r_flat = q_r.view(-1, num_regimes)
+            
+            # Target magnitude for MI
+            target_mag = target_demand.norm(dim=-1, keepdim=True).view(-1, 1)
+            regime_weights = q_r_flat.sum(dim=0) + 1e-8
+            expected_mag_per_regime = (q_r_flat * target_mag).sum(dim=0) / regime_weights
+            
+            # Maximize variance of expected target magnitude across regimes
+            mi_loss = -0.5 * torch.var(expected_mag_per_regime)
+            
+            # Penalize dead regimes (force utilization)
+            avg_q_r = q_r_flat.mean(dim=0)
+            util_loss = 1.0 * (num_regimes * avg_q_r * torch.log(num_regimes * avg_q_r + 1e-8)).mean()
+            
         # KL Annealing
-        anneal_factor = min(1.0, epoch / (total_epochs * 0.5))
+        # (Annealing factor is passed from train.py, or we can use the default if not provided)
+        # We will assume train.py passes it in some form, but we'll re-calculate just in case:
+        cycle_length = max(1, total_epochs // 2)
+        cycle_frac = (epoch % cycle_length) / cycle_length
+        anneal_factor = min(1.0, cycle_frac / 0.5)
         
-        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r
+        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
             'loss_gen': loss_gen_per_item.mean().item(),
             'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
-            'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r
+            'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
+            'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss
         }
