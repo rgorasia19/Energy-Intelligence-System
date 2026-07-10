@@ -16,8 +16,8 @@ class LatentSSM(nn.Module):
         
         # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
-        self.z0_mean = nn.Linear(hidden_dim, latent_dim)
-        self.z0_raw_var = nn.Linear(hidden_dim, latent_dim)
+        self.z0_mean = nn.Linear(hidden_dim, latent_dim * 2) # demand + gen
+        self.z0_raw_var = nn.Linear(hidden_dim, latent_dim * 2)
         
         # Initial regime prior
         self.r0_logits = nn.Linear(hidden_dim, num_regimes)
@@ -26,35 +26,44 @@ class LatentSSM(nn.Module):
         # Takes future targets + known futures to infer optimal z_t and r_t
         self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + known_dim, hidden_dim, batch_first=True, bidirectional=True)
         self.post_r_logits = nn.Linear(hidden_dim * 2, num_regimes)
-        self.post_z_mean = nn.Linear(hidden_dim * 2, latent_dim)
-        self.post_z_raw_var = nn.Linear(hidden_dim * 2, latent_dim)
+        self.post_z_mean = nn.Linear(hidden_dim * 2, latent_dim * 2)
+        self.post_z_raw_var = nn.Linear(hidden_dim * 2, latent_dim * 2)
         
         # 3. Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
         self.prior_r_net = nn.Sequential(
-            nn.Linear(latent_dim + num_regimes + known_dim, hidden_dim),
+            nn.Linear(latent_dim * 2 + num_regimes + known_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, num_regimes)
         )
         
         # Continuous transition: p(z_t | z_{t-1}, r_t, u_t)
-        # Mixture of Experts: K separate transition networks
-        self.prior_z_experts = nn.ModuleList([
+        # Separate experts for Demand and Gen
+        self.prior_z_experts_demand = nn.ModuleList([
             nn.Sequential(
                 nn.Linear(latent_dim + known_dim, hidden_dim),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var
+                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for demand
+            ) for _ in range(num_regimes)
+        ])
+        
+        self.prior_z_experts_gen = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(latent_dim + known_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for gen
             ) for _ in range(num_regimes)
         ])
         
         # 4. Probabilistic Emission
+        # +1 for horizon-aware variance feature (normalized horizon step h/horizon)
         self.emit_demand = nn.Sequential(
-            nn.Linear(latent_dim + known_dim, hidden_dim),
+            nn.Linear(latent_dim + known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.emit_gen = nn.Sequential(
-            nn.Linear(latent_dim + known_dim, hidden_dim),
+            nn.Linear(latent_dim + known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -142,20 +151,31 @@ class LatentSSM(nn.Module):
                 r_next = F.one_hot(torch.argmax(r_logits_t, dim=-1), num_classes=self.num_regimes).float()
                 
             # Prior Continuous Transition (Mixture of Experts)
-            # z_curr: [batch, latent_dim], u_t: [batch, known_dim], r_next: [batch, num_regimes]
-            z_prior_input = torch.cat([z_curr, u_t], dim=-1)
+            # z_curr: [batch, latent_dim * 2]
+            z_curr_d, z_curr_g = torch.split(z_curr, self.latent_dim, dim=-1)
+            
+            z_prior_input_d = torch.cat([z_curr_d, u_t], dim=-1)
+            z_prior_input_g = torch.cat([z_curr_g, u_t], dim=-1)
             
             # Compute outputs for all K experts
-            expert_outputs = []
+            expert_outputs_d = []
+            expert_outputs_g = []
             for k in range(self.num_regimes):
-                expert_outputs.append(self.prior_z_experts[k](z_prior_input)) # Each: [batch, latent_dim * 2]
-            expert_outputs = torch.stack(expert_outputs, dim=1) # [batch, num_regimes, latent_dim * 2]
+                expert_outputs_d.append(self.prior_z_experts_demand[k](z_prior_input_d))
+                expert_outputs_g.append(self.prior_z_experts_gen[k](z_prior_input_g))
+                
+            expert_outputs_d = torch.stack(expert_outputs_d, dim=1) # [batch, num_regimes, latent_dim * 2]
+            expert_outputs_g = torch.stack(expert_outputs_g, dim=1)
             
             # Weighted sum over experts using Gumbel-Softmax r_next
-            z_out = torch.einsum('bk,bkd->bd', r_next, expert_outputs)
+            z_out_d = torch.einsum('bk,bkd->bd', r_next, expert_outputs_d)
+            z_out_g = torch.einsum('bk,bkd->bd', r_next, expert_outputs_g)
             
-            z_mean, z_raw_var = torch.split(z_out, self.latent_dim, dim=-1)
-            z_var = self._get_var(z_raw_var)
+            z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim, dim=-1)
+            z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim, dim=-1)
+            
+            z_mean = torch.cat([z_mean_d, z_mean_g], dim=-1)
+            z_var = torch.cat([self._get_var(z_raw_var_d), self._get_var(z_raw_var_g)], dim=-1)
             
             prior_z_mean_seq.append(z_mean)
             prior_z_var_seq.append(z_var)
@@ -185,13 +205,20 @@ class LatentSSM(nn.Module):
         sampled_r_seq = torch.stack(sampled_r_seq, dim=1)
         
         # 4. Probabilistic Emission
-        emit_input = torch.cat([sampled_z_seq, decoder_inputs], dim=-1)
+        sampled_z_d, sampled_z_g = torch.split(sampled_z_seq, self.latent_dim, dim=-1)
         
-        demand_features = self.emit_demand(emit_input)
+        # Horizon feature h / horizon
+        h_feature = torch.arange(horizon, device=device, dtype=torch.float32) / float(horizon)
+        h_feature = h_feature.view(1, horizon, 1).expand(batch_size, horizon, 1)
+        
+        emit_input_d = torch.cat([sampled_z_d, decoder_inputs, h_feature], dim=-1)
+        emit_input_g = torch.cat([sampled_z_g, decoder_inputs, h_feature], dim=-1)
+        
+        demand_features = self.emit_demand(emit_input_d)
         demand_mean = self.demand_mean(demand_features)
         demand_var = self._get_var(self.demand_raw_var(demand_features))
         
-        gen_features = self.emit_gen(emit_input)
+        gen_features = self.emit_gen(emit_input_g)
         gen_mean = self.gen_mean(gen_features)
         gen_var = self._get_var(self.gen_raw_var(gen_features))
         
@@ -372,7 +399,14 @@ class SSMLoss(nn.Module):
         cycle_frac = (epoch % cycle_length) / cycle_length
         anneal_factor = min(1.0, cycle_frac / 0.5)
         
-        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss
+        # Latent Smoothness Loss
+        if prior_z_mean.size(1) > 1:
+            diff = prior_z_mean[:, 1:, :] - prior_z_mean[:, :-1, :]
+            smoothness_loss = 0.1 * (diff ** 2).sum(dim=-1).mean()
+        else:
+            smoothness_loss = 0.0
+        
+        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -382,5 +416,6 @@ class SSMLoss(nn.Module):
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
             'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
-            'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss
+            'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss,
+            'smoothness_loss': smoothness_loss.item() if isinstance(smoothness_loss, torch.Tensor) else smoothness_loss
         }
