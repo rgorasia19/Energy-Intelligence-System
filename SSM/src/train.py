@@ -148,7 +148,7 @@ def train():
                 
                 # Inject synthetic target spike into a random segment (5% probability)
                 if torch.rand(1).item() < 0.05:
-                    spike_len = torch.randint(1, 4, (1,)).item()
+                    spike_len = min(max_horizon, torch.randint(1, 4, (1,)).item())
                     start_idx = torch.randint(0, max_horizon - spike_len + 1, (1,)).item()
                     shock = torch.empty(dec_targets.shape[0], 1, 1, device=device).uniform_(1.2, 2.0)
                     dec_targets[:, start_idx:start_idx+spike_len, :] = dec_targets[:, start_idx:start_idx+spike_len, :] * shock
