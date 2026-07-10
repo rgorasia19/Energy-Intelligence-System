@@ -3,13 +3,21 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=8, hidden_dim=64, num_regimes=4, dropout=0.2):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=8, hidden_dim=64, num_regimes=4, dropout=0.2, fourier_dim=12, fourier_embed_dim=16):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
         self.gen_dim = gen_dim
         self.known_dim = known_dim
         self.num_regimes = num_regimes
+        self.fourier_dim = fourier_dim
+        
+        self.fourier_embed = nn.Sequential(
+            nn.Linear(fourier_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, fourier_embed_dim)
+        )
+        self.processed_known_dim = known_dim - fourier_dim + fourier_embed_dim
         
         # Learnable variance scaling parameter (alpha) initialized to 2.0 (ln(2) approx 0.693)
         self.log_alpha = nn.Parameter(torch.tensor([0.693]))
@@ -24,7 +32,7 @@ class LatentSSM(nn.Module):
         
         # 2. Bidirectional Smoothing Posterior
         # Takes future targets + known futures to infer optimal z_t and r_t
-        self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + known_dim, hidden_dim, batch_first=True, bidirectional=True)
+        self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=True)
         self.post_r_logits = nn.Linear(hidden_dim * 2, num_regimes)
         self.post_z_mean = nn.Linear(hidden_dim * 2, latent_dim * 2)
         self.post_z_raw_var = nn.Linear(hidden_dim * 2, latent_dim * 2)
@@ -32,7 +40,7 @@ class LatentSSM(nn.Module):
         # 3. Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
         self.prior_r_net = nn.Sequential(
-            nn.Linear(latent_dim * 2 + num_regimes + known_dim, hidden_dim),
+            nn.Linear(latent_dim * 2 + num_regimes + self.processed_known_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, num_regimes)
         )
@@ -41,7 +49,7 @@ class LatentSSM(nn.Module):
         # Separate experts for Demand and Gen
         self.prior_z_experts_demand = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(latent_dim + known_dim, hidden_dim),
+                nn.Linear(latent_dim + self.processed_known_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for demand
             ) for _ in range(num_regimes)
@@ -49,7 +57,7 @@ class LatentSSM(nn.Module):
         
         self.prior_z_experts_gen = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(latent_dim + known_dim, hidden_dim),
+                nn.Linear(latent_dim + self.processed_known_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for gen
             ) for _ in range(num_regimes)
@@ -58,12 +66,12 @@ class LatentSSM(nn.Module):
         # 4. Probabilistic Emission
         # +1 for horizon-aware variance feature (normalized horizon step h/horizon)
         self.emit_demand = nn.Sequential(
-            nn.Linear(latent_dim + known_dim + 1, hidden_dim),
+            nn.Linear(latent_dim + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.emit_gen = nn.Sequential(
-            nn.Linear(latent_dim + known_dim + 1, hidden_dim),
+            nn.Linear(latent_dim + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -86,6 +94,12 @@ class LatentSSM(nn.Module):
     def sample_regime(self, logits, tau=1.0, hard=True):
         return F.gumbel_softmax(logits, tau=tau, hard=hard, dim=-1)
         
+    def _process_known(self, u):
+        fourier = u[..., :self.fourier_dim]
+        other = u[..., self.fourier_dim:]
+        f_emb = self.fourier_embed(fourier)
+        return torch.cat([f_emb, other], dim=-1)
+        
     def forward(self, encoder_inputs, decoder_inputs, horizon, target_seq=None, sample=False, tau=1.0):
         """
         encoder_inputs: [batch, seq_len, input_dim]
@@ -94,6 +108,8 @@ class LatentSSM(nn.Module):
         """
         batch_size = encoder_inputs.size(0)
         device = encoder_inputs.device
+        
+        processed_decoder_inputs = self._process_known(decoder_inputs)
         
         # 1. Encode past for z0 and r0
         _, h_n = self.encoder_gru(encoder_inputs)
@@ -117,7 +133,7 @@ class LatentSSM(nn.Module):
         post_z_var_seq = None
         
         if self.training and target_seq is not None:
-            post_inputs = torch.cat([target_seq, decoder_inputs], dim=-1)
+            post_inputs = torch.cat([target_seq, processed_decoder_inputs], dim=-1)
             post_out, _ = self.posterior_lstm(post_inputs)
             post_r_logits_seq = self.post_r_logits(post_out)
             post_z_mean_seq = self.post_z_mean(post_out)
@@ -131,7 +147,7 @@ class LatentSSM(nn.Module):
         sampled_r_seq = []
         
         for t in range(horizon):
-            u_t = decoder_inputs[:, t, :]
+            u_t = processed_decoder_inputs[:, t, :]
             
             # Prior Regime Transition
             r_prior_input = torch.cat([z_curr, r_curr, u_t], dim=-1)
@@ -211,8 +227,8 @@ class LatentSSM(nn.Module):
         h_feature = torch.arange(horizon, device=device, dtype=torch.float32) / float(horizon)
         h_feature = h_feature.view(1, horizon, 1).expand(batch_size, horizon, 1)
         
-        emit_input_d = torch.cat([sampled_z_d, decoder_inputs, h_feature], dim=-1)
-        emit_input_g = torch.cat([sampled_z_g, decoder_inputs, h_feature], dim=-1)
+        emit_input_d = torch.cat([sampled_z_d, processed_decoder_inputs, h_feature], dim=-1)
+        emit_input_g = torch.cat([sampled_z_g, processed_decoder_inputs, h_feature], dim=-1)
         
         demand_features = self.emit_demand(emit_input_d)
         demand_mean = self.demand_mean(demand_features)

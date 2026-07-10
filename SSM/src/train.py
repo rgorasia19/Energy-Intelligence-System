@@ -67,11 +67,12 @@ def train():
     num_regimes = 4
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
-    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos') or c == 'is_bank_holiday']
+    fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
+    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in feature_cols else []
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     
-    known_columns = weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
+    known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
@@ -95,7 +96,8 @@ def train():
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
         num_regimes=num_regimes,
-        dropout=0.2
+        dropout=0.2,
+        fourier_dim=len(fourier_cols)
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)

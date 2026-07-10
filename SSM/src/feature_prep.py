@@ -82,11 +82,12 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     day_of_week = df.index.dayofweek
     day_of_year = df.index.dayofyear
     
-    new_cols['day_of_week_sin'] = np.sin(2 * np.pi * day_of_week / 7.0)
-    new_cols['day_of_week_cos'] = np.cos(2 * np.pi * day_of_week / 7.0)
-    
-    new_cols['day_of_year_sin'] = np.sin(2 * np.pi * day_of_year / 365.25)
-    new_cols['day_of_year_cos'] = np.cos(2 * np.pi * day_of_year / 365.25)
+    # Fourier terms K=3
+    for k in range(1, 4):
+        new_cols[f'day_of_week_sin_k{k}'] = np.sin(2 * np.pi * k * day_of_week / 7.0)
+        new_cols[f'day_of_week_cos_k{k}'] = np.cos(2 * np.pi * k * day_of_week / 7.0)
+        new_cols[f'day_of_year_sin_k{k}'] = np.sin(2 * np.pi * k * day_of_year / 365.25)
+        new_cols[f'day_of_year_cos_k{k}'] = np.cos(2 * np.pi * k * day_of_year / 365.25)
     
     # Rolling stats for non-mask columns
     base_cols = [c for c in df.columns if not c.endswith('_available') and not c.endswith('_sin') and not c.endswith('_cos')]
@@ -114,53 +115,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
         
     return df
 
-from sklearn.linear_model import LinearRegression
 
-def fit_seasonality(df: pd.DataFrame, target_cols: list) -> dict:
-    """
-    Fits a linear regression on deterministic calendar features to extract seasonality.
-    Returns a dictionary of trained models for each target.
-    """
-    models = {}
-    cal_features = ['day_of_week_sin', 'day_of_week_cos', 'day_of_year_sin', 'day_of_year_cos']
-    
-    # We drop NaNs to fit the model
-    temp_df = df.dropna(subset=cal_features)
-    
-    for col in target_cols:
-        if col in temp_df.columns:
-            valid_df = temp_df.dropna(subset=[col])
-            if len(valid_df) > 0:
-                X = valid_df[cal_features]
-                y = valid_df[col]
-                lr = LinearRegression()
-                lr.fit(X, y)
-                models[col] = lr
-    return models
-
-def transform_seasonality(df: pd.DataFrame, models: dict, target_cols: list) -> pd.DataFrame:
-    """
-    Subtracts the predicted seasonality from target columns and saves the seasonality.
-    """
-    df = df.copy()
-    cal_features = ['day_of_week_sin', 'day_of_week_cos', 'day_of_year_sin', 'day_of_year_cos']
-    
-    X = df[cal_features].fillna(0) # In case of missing calendar features, though they shouldn't be
-    
-    for col in target_cols:
-        if col in models and col in df.columns:
-            # Predict seasonality
-            seasonality = models[col].predict(X)
-            
-            # Store it
-            df[f"{col}_seasonality"] = seasonality
-            
-            # Subtract from target to leave residuals
-            # We don't overwrite the original column yet if we want to keep it, 
-            # but wait, if we overwrite it, the rest of the pipeline (scaler, dataset) will just work on residuals!
-            df[col] = df[col] - seasonality
-            
-    return df
 
 def fit_scaler(df: pd.DataFrame, feature_cols: list) -> RobustScaler:
     """
@@ -221,25 +176,19 @@ class SSMDataset(Dataset):
         
         if known_columns is None:
             # Fallback to identify sin/cos calendar features if not explicitly provided
-            known_columns = [c for c in df.columns if c.endswith('_sin') or c.endswith('_cos')]
+            known_columns = [c for c in df.columns if '_sin' in c or '_cos' in c]
         self.known_features = df[known_columns].values
         
         # Pre-calculate masks: 1 if present (not NaN), 0 if missing (NaN)
         self.feature_masks = (~np.isnan(self.features)).astype(np.float32)
         self.target_masks = (~np.isnan(self.targets)).astype(np.float32)
         
-        # Extract seasonality if present (unscaled)
-        self.seasonality = np.zeros_like(self.targets)
-        for i, col in enumerate(target_columns):
-            seas_col = f"{col}_seasonality"
-            if seas_col in df.columns:
-                self.seasonality[:, i] = df[seas_col].values
-                
+
         # Zero-fill NaNs for tensor conversion (the mask will tell the model to ignore them)
         self.features = np.nan_to_num(self.features, nan=0.0)
         self.targets = np.nan_to_num(self.targets, nan=0.0)
         self.known_features = np.nan_to_num(self.known_features, nan=0.0)
-        self.seasonality = np.nan_to_num(self.seasonality, nan=0.0)
+
         
         self.valid_indices = self._get_valid_indices()
         
@@ -275,15 +224,12 @@ class SSMDataset(Dataset):
         decoder_targets = torch.tensor(self.targets[enc_end:dec_end], dtype=torch.float32)
         decoder_mask = torch.tensor(self.target_masks[enc_end:dec_end], dtype=torch.float32)
         
-        decoder_seasonality = torch.tensor(self.seasonality[enc_end:dec_end], dtype=torch.float32)
-        
         return {
             "encoder_inputs": encoder_inputs,
             "encoder_mask": encoder_mask,
             "decoder_inputs": decoder_inputs,
             "decoder_targets": decoder_targets,
-            "decoder_mask": decoder_mask,
-            "decoder_seasonality": decoder_seasonality
+            "decoder_mask": decoder_mask
         }
 
 def time_split(df: pd.DataFrame, train_end: str, val_end: str):
@@ -340,12 +286,7 @@ if __name__ == "__main__":
     # 5. Split
     train, val, test = time_split(engineered, '2001-12-31', '2002-12-31')
     
-    # 5.5 Seasonal Decomposition
-    target_cols = ['demand']
-    seas_models = fit_seasonality(train, target_cols)
-    train = transform_seasonality(train, seas_models, target_cols)
-    val = transform_seasonality(val, seas_models, target_cols)
-    test = transform_seasonality(test, seas_models, target_cols)
+
     
     # 6. Scale
     feature_cols = [c for c in engineered.columns]

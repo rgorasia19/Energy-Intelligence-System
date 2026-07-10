@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import joblib
-from feature_prep import standardise_timeseries, merge_features, engineer_features, fit_scaler, transform_data, time_split, fit_seasonality, transform_seasonality
+from feature_prep import standardise_timeseries, merge_features, engineer_features, fit_scaler, transform_data, time_split
 
 def main():
     raw_dir = '../../datalake/raw_data'
@@ -48,16 +48,6 @@ def main():
     # 4. Split
     print("Splitting data...")
     train, val, test = time_split(engineered, '2016-12-31', '2019-12-31')
-    
-    target_cols = demand_flow_cols + gen_flow_cols
-    
-    # 4.5 Seasonal Decomposition
-    print("Extracting deterministic seasonality...")
-    seas_models = fit_seasonality(train, target_cols)
-    train = transform_seasonality(train, seas_models, target_cols)
-    val = transform_seasonality(val, seas_models, target_cols)
-    test = transform_seasonality(test, seas_models, target_cols)
-    
     # 5. Scale
     print("Scaling data...")
     feature_cols = list(engineered.columns)
@@ -77,6 +67,7 @@ def main():
     joblib.dump(scaler, os.path.join(out_dir, 'scaler.pkl'))
     
     # Target columns
+    target_cols = demand_flow_cols + gen_flow_cols
     joblib.dump({
         'feature_columns': feature_cols,
         'target_columns': target_cols

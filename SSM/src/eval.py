@@ -72,10 +72,11 @@ def evaluate():
     num_regimes = 4
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
-    calendar_cols = [c for c in feature_cols if c.endswith('_sin') or c.endswith('_cos') or c == 'is_bank_holiday']
+    fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
+    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in feature_cols else []
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
-    known_columns = weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
+    known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
     
     model = LatentSSM(
@@ -85,7 +86,8 @@ def evaluate():
         known_dim=known_dim,
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
-        num_regimes=num_regimes
+        num_regimes=num_regimes,
+        fourier_dim=len(fourier_cols)
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     
@@ -108,13 +110,11 @@ def evaluate():
     all_demand_var = []
     all_true_demand = []
     all_mask_demand = []
-    all_seas_demand = []
     
     all_gen_mean = []
     all_gen_var = []
     all_true_gen = []
     all_mask_gen = []
-    all_seas_gen = []
     
     all_z_seq = []
     all_r_seq = []
@@ -127,11 +127,7 @@ def evaluate():
             dec_targets = batch['decoder_targets'].numpy()
             dec_masks = batch['decoder_mask'].numpy()
             
-            # If decoder_seasonality exists, load it, otherwise zeros
-            if 'decoder_seasonality' in batch:
-                dec_seas = batch['decoder_seasonality'].numpy()
-            else:
-                dec_seas = np.zeros_like(dec_targets)
+
             
             N = 50
             batch_demand_samples = []
@@ -170,13 +166,11 @@ def evaluate():
             all_demand_var.append(demand_var)
             all_true_demand.append(dec_targets[:, :, demand_idx])
             all_mask_demand.append(dec_masks[:, :, demand_idx])
-            all_seas_demand.append(dec_seas[:, :, demand_idx])
             
             all_gen_mean.append(gen_mean)
             all_gen_var.append(gen_var)
             all_true_gen.append(dec_targets[:, :, gen_idx])
             all_mask_gen.append(dec_masks[:, :, gen_idx])
-            all_seas_gen.append(dec_seas[:, :, gen_idx])
             
             # For simplicity, just append the last r_seq
             all_z_seq.append(outputs['sampled_z_seq'].cpu().numpy())
@@ -187,13 +181,11 @@ def evaluate():
     demand_var = np.concatenate(all_demand_var, axis=0)
     true_demand = np.concatenate(all_true_demand, axis=0)
     mask_demand = np.concatenate(all_mask_demand, axis=0)
-    seas_demand = np.concatenate(all_seas_demand, axis=0)
     
     gen_mean = np.concatenate(all_gen_mean, axis=0)
     gen_var = np.concatenate(all_gen_var, axis=0)
     true_gen = np.concatenate(all_true_gen, axis=0)
     mask_gen = np.concatenate(all_mask_gen, axis=0)
-    seas_gen = np.concatenate(all_seas_gen, axis=0)
     
     z_seq = np.concatenate(all_z_seq, axis=0)
     r_seq = np.concatenate(all_r_seq, axis=0)
@@ -225,13 +217,8 @@ def evaluate():
         
         print(f"[{name}] MAE: {mae:.4f} | RMSE: {rmse:.4f} | NLL: {mean_nll:.4f} | CRPS: {mean_crps:.4f} | 90% Coverage: {coverage:.2%}")
 
-    # Residual performance (Secondary)
-    print("\n[SECONDARY] Residual Performance (Scaled)")
-    calc_metrics(demand_mean, demand_var, true_demand, mask_demand, "Demand (Resid)")
-    calc_metrics(gen_mean, gen_var, true_gen, mask_gen, "Generation (Resid)")
-    
-    # Reconstruct raw performance (Primary)
-    print("\n[PRIMARY] Raw Reconstructed Performance")
+    # Reconstruct raw performance
+    print("\n--- Performance Metrics ---")
     
     # Extract scales and centers for targets
     cols_to_scale = [c for c in feature_cols if not c.endswith('_available')]
@@ -242,17 +229,17 @@ def evaluate():
     gen_scales = np.array([scaler.scale_[cols_to_scale.index(target_cols[i])] for i in gen_idx])
     gen_centers = np.array([scaler.center_[cols_to_scale.index(target_cols[i])] for i in gen_idx])
     
-    # Unscale and add seasonality
-    raw_demand_mean = (demand_mean * demand_scales + demand_centers) + seas_demand
+    # Unscale predictions and targets
+    raw_demand_mean = demand_mean * demand_scales + demand_centers
     raw_demand_var = demand_var * (demand_scales ** 2)
-    raw_true_demand = (true_demand * demand_scales + demand_centers) + seas_demand
+    raw_true_demand = true_demand * demand_scales + demand_centers
     
-    raw_gen_mean = (gen_mean * gen_scales + gen_centers) + seas_gen
+    raw_gen_mean = gen_mean * gen_scales + gen_centers
     raw_gen_var = gen_var * (gen_scales ** 2)
-    raw_true_gen = (true_gen * gen_scales + gen_centers) + seas_gen
+    raw_true_gen = true_gen * gen_scales + gen_centers
     
-    calc_metrics(raw_demand_mean, raw_demand_var, raw_true_demand, mask_demand, "Demand (Raw)")
-    calc_metrics(raw_gen_mean, raw_gen_var, raw_true_gen, mask_gen, "Generation (Raw)")
+    calc_metrics(raw_demand_mean, raw_demand_var, raw_true_demand, mask_demand, "Demand")
+    calc_metrics(raw_gen_mean, raw_gen_var, raw_true_gen, mask_gen, "Generation")
     
     # Regime Occupancy
     r_labels = np.argmax(r_seq, axis=-1)
