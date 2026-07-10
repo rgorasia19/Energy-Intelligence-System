@@ -130,15 +130,9 @@ def train():
             train_loss = 0.0
             train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0}
             
-            # Rollout Curriculum: increase horizon progressively
-            if epoch < 10:
-                max_horizon = min(horizon, 8)
-            elif epoch < 20:
-                max_horizon = min(horizon, 15)
-            elif epoch < 30:
-                max_horizon = min(horizon, 22)
-            else:
-                max_horizon = horizon
+            # Curriculum: grow horizon linearly over first 50% of epochs
+            curriculum_frac = min(1.0, (epoch + 1) / max(1, epochs / 2))
+            max_horizon = max(1, int(np.ceil(horizon * curriculum_frac)))
                 
             for batch in train_loader:
                 enc_inputs = batch['encoder_inputs'].to(device)
@@ -150,12 +144,15 @@ def train():
                 enc_inputs = enc_inputs + torch.randn_like(enc_inputs) * 0.05
                 dec_inputs = dec_inputs + torch.randn_like(dec_inputs) * 0.05
                 
+                # Inject synthetic target spike into a random segment (5% probability)
                 if torch.rand(1).item() < 0.05:
+                    spike_len = torch.randint(1, 4, (1,)).item()
+                    start_idx = torch.randint(0, max_horizon - spike_len + 1, (1,)).item()
                     shock = torch.empty(dec_targets.shape[0], 1, 1, device=device).uniform_(1.2, 2.0)
-                    dec_targets = dec_targets * shock
+                    dec_targets[:, start_idx:start_idx+spike_len, :] = dec_targets[:, start_idx:start_idx+spike_len, :] * shock
                 
-                # Variable random lengths to prevent horizon-specific overfitting
-                current_horizon = torch.randint(8, max_horizon + 1, (1,)).item()
+                # Curriculum horizon
+                current_horizon = max_horizon
                 
                 dec_inputs_trunc = dec_inputs[:, :current_horizon, :]
                 dec_targets_trunc = dec_targets[:, :current_horizon, :]

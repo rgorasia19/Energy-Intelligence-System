@@ -288,7 +288,6 @@ class SSMLoss(nn.Module):
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
         if k_samples > 1:
-            # Reshape to [batch, K]
             batch_size = total_recon_per_item.size(0) // k_samples
             recon_reshaped = total_recon_per_item.view(batch_size, k_samples)
             import math
@@ -297,7 +296,18 @@ class SSMLoss(nn.Module):
         else:
             recon_loss = total_recon_per_item.mean()
             
-        recon_loss = recon_loss + coverage_loss
+        # Macro Consistency Loss (Sum over horizon)
+        sum_pred_demand = (demand_mean * mask_demand).sum(dim=1)
+        sum_target_demand = (target_demand * mask_demand).sum(dim=1)
+        consistency_loss_demand = F.l1_loss(sum_pred_demand, sum_target_demand, reduction='none').mean()
+        
+        sum_pred_gen = (gen_mean * mask_gen).sum(dim=1)
+        sum_target_gen = (target_gen * mask_gen).sum(dim=1)
+        consistency_loss_gen = F.l1_loss(sum_pred_gen, sum_target_gen, reduction='none').mean()
+        
+        consistency_loss = 0.1 * (consistency_loss_demand + consistency_loss_gen)
+            
+        recon_loss = recon_loss + coverage_loss + consistency_loss
         
         # 2. Latent Consistency (KL Divergence)
         post_z_mean = model_outputs['post_z_mean_seq']
@@ -313,6 +323,7 @@ class SSMLoss(nn.Module):
         entropy_r = 0.0
         mi_loss = 0.0
         util_loss = 0.0
+        semantic_anchor_loss = 0.0
         
         if post_z_mean is not None:
             # KL for continuous state
@@ -343,6 +354,17 @@ class SSMLoss(nn.Module):
             avg_q_r = q_r_flat.mean(dim=0)
             util_loss = 1.0 * (num_regimes * avg_q_r * torch.log(num_regimes * avg_q_r + 1e-8)).mean()
             
+            # Semantic Anchor: Force Regime 0 for >90th percentile demand
+            demand_scalar = target_demand.mean(dim=-1)
+            q90 = torch.quantile(demand_scalar, 0.9)
+            extreme_mask = demand_scalar > q90
+            if extreme_mask.any():
+                extreme_logits = post_r_logits[extreme_mask]
+                target_regime = torch.zeros(extreme_logits.size(0), dtype=torch.long, device=extreme_logits.device)
+                semantic_anchor_loss = 1.0 * F.cross_entropy(extreme_logits, target_regime)
+            else:
+                semantic_anchor_loss = 0.0
+            
         # KL Annealing
         # (Annealing factor is passed from train.py, or we can use the default if not provided)
         # We will assume train.py passes it in some form, but we'll re-calculate just in case:
@@ -350,7 +372,7 @@ class SSMLoss(nn.Module):
         cycle_frac = (epoch % cycle_length) / cycle_length
         anneal_factor = min(1.0, cycle_frac / 0.5)
         
-        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss
+        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -358,5 +380,7 @@ class SSMLoss(nn.Module):
             'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
-            'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss
+            'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
+            'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
+            'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss
         }
