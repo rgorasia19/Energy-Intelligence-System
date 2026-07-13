@@ -3,8 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=8, hidden_dim=64, num_regimes=4, dropout=0.2, fourier_dim=12, fourier_embed_dim=16,
-                 demand_scale=None, demand_center=None, gen_scale=None, gen_center=None):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=8, hidden_dim=64, num_regimes=4, dropout=0.2, fourier_dim=12, fourier_embed_dim=16):
         super().__init__()
         self.latent_dim = latent_dim
         self.demand_dim = demand_dim
@@ -22,27 +21,6 @@ class LatentSSM(nn.Module):
         
         # Learnable variance scaling parameter (alpha) initialized to 2.0 (ln(2) approx 0.693)
         self.log_alpha = nn.Parameter(torch.tensor([0.693]))
-        
-        # Register scale/center values for demand and gen targets as buffers to handle unscaling to raw space
-        if demand_scale is not None:
-            self.register_buffer('demand_scale', torch.tensor(demand_scale, dtype=torch.float32))
-        else:
-            self.register_buffer('demand_scale', torch.ones(demand_dim, dtype=torch.float32))
-            
-        if demand_center is not None:
-            self.register_buffer('demand_center', torch.tensor(demand_center, dtype=torch.float32))
-        else:
-            self.register_buffer('demand_center', torch.zeros(demand_dim, dtype=torch.float32))
-            
-        if gen_scale is not None:
-            self.register_buffer('gen_scale', torch.tensor(gen_scale, dtype=torch.float32))
-        else:
-            self.register_buffer('gen_scale', torch.ones(gen_dim, dtype=torch.float32))
-            
-        if gen_center is not None:
-            self.register_buffer('gen_center', torch.tensor(gen_center, dtype=torch.float32))
-        else:
-            self.register_buffer('gen_center', torch.zeros(gen_dim, dtype=torch.float32))
         
         # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
@@ -212,10 +190,6 @@ class LatentSSM(nn.Module):
             z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim, dim=-1)
             z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim, dim=-1)
             
-            # Learn residual dynamics: z_mean = z_curr + z_delta
-            z_mean_d = z_curr_d + z_mean_d
-            z_mean_g = z_curr_g + z_mean_g
-            
             z_mean = torch.cat([z_mean_d, z_mean_g], dim=-1)
             z_var = torch.cat([self._get_var(z_raw_var_d), self._get_var(z_raw_var_g)], dim=-1)
             
@@ -264,13 +238,6 @@ class LatentSSM(nn.Module):
         gen_mean = self.gen_mean(gen_features)
         gen_var = self._get_var(self.gen_raw_var(gen_features))
         
-        # Unscale predicted mean & variance to raw physical space
-        demand_mean = demand_mean * self.demand_scale + self.demand_center
-        demand_var = demand_var * (self.demand_scale ** 2)
-        
-        gen_mean = gen_mean * self.gen_scale + self.gen_center
-        gen_var = gen_var * (self.gen_scale ** 2)
-        
         return {
             'z0_mean': z0_mean,
             'z0_var': z0_var,
@@ -290,32 +257,11 @@ class LatentSSM(nn.Module):
         }
 
 class SSMLoss(nn.Module):
-    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1,
-                 demand_scale=None, demand_center=None, gen_scale=None, gen_center=None):
+    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1):
         super().__init__()
         self.kl_z_weight = kl_z_weight
         self.kl_r_weight = kl_r_weight
         self.entropy_weight = entropy_weight
-        
-        if demand_scale is not None:
-            self.register_buffer('demand_scale', torch.tensor(demand_scale, dtype=torch.float32))
-        else:
-            self.register_buffer('demand_scale', None)
-            
-        if demand_center is not None:
-            self.register_buffer('demand_center', torch.tensor(demand_center, dtype=torch.float32))
-        else:
-            self.register_buffer('demand_center', None)
-            
-        if gen_scale is not None:
-            self.register_buffer('gen_scale', torch.tensor(gen_scale, dtype=torch.float32))
-        else:
-            self.register_buffer('gen_scale', None)
-            
-        if gen_center is not None:
-            self.register_buffer('gen_center', torch.tensor(gen_center, dtype=torch.float32))
-        else:
-            self.register_buffer('gen_center', None)
         
 
         
@@ -346,12 +292,6 @@ class SSMLoss(nn.Module):
         target_demand = targets[:, :, demand_idx]
         target_gen = targets[:, :, gen_idx]
         
-        # Unscale targets to raw space before loss calculation
-        if self.demand_scale is not None and self.demand_center is not None:
-            target_demand = target_demand * self.demand_scale + self.demand_center
-        if self.gen_scale is not None and self.gen_center is not None:
-            target_gen = target_gen * self.gen_scale + self.gen_center
-            
         mask_demand = masks[:, :, demand_idx]
         mask_gen = masks[:, :, gen_idx]
         
@@ -373,16 +313,20 @@ class SSMLoss(nn.Module):
             return per_item
             
         def calc_coverage_penalty(mean, var, target, mask):
-            std = torch.sqrt(var) + 1e-8
-            z = (target - mean) / std
-            # 90% interval corresponds to [-1.645, 1.645] in dimensionless z-score space
-            scale = 5.0
-            coverage_approx = torch.sigmoid(scale * (z + 1.645)) * torch.sigmoid(scale * (1.645 - z))
+            std = torch.sqrt(var)
+            lower = mean - 1.645 * std
+            upper = mean + 1.645 * std
+            scale = 10.0
+            coverage_approx = torch.sigmoid(scale * (target - lower)) * torch.sigmoid(scale * (upper - target))
             coverage = (coverage_approx * mask).sum() / (mask.sum() + 1e-8)
             return (0.9 - coverage) ** 2
             
         loss_demand_per_item = calc_per_item_loss(demand_mean, demand_var, target_demand, mask_demand, True)
         loss_gen_per_item = calc_per_item_loss(gen_mean, gen_var, target_gen, mask_gen, False)
+        
+        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
+        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
+        coverage_loss = 10.0 * (coverage_demand + coverage_gen)
         
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
@@ -394,12 +338,6 @@ class SSMLoss(nn.Module):
             recon_loss = recon_loss.mean()
         else:
             recon_loss = total_recon_per_item.mean()
-            
-        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
-        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
-        # Weight coverage penalty relative to recon_loss magnitude so calibration pressure remains strong in raw space
-        coverage_weight = torch.clamp(recon_loss.detach().abs() * 0.5, min=10.0)
-        coverage_loss = coverage_weight * (coverage_demand + coverage_gen)
             
         # Macro Consistency Loss (Sum over horizon)
         sum_pred_demand = (demand_mean * mask_demand).sum(dim=1)
@@ -447,8 +385,8 @@ class SSMLoss(nn.Module):
             num_regimes = q_r.size(-1)
             q_r_flat = q_r.view(-1, num_regimes)
             
-            # Target magnitude for MI (use scaled targets to keep MI loss invariant to target scale)
-            target_mag = targets[:, :, demand_idx].norm(dim=-1, keepdim=True).view(-1, 1)
+            # Target magnitude for MI
+            target_mag = target_demand.norm(dim=-1, keepdim=True).view(-1, 1)
             regime_weights = q_r_flat.sum(dim=0) + 1e-8
             expected_mag_per_regime = (q_r_flat * target_mag).sum(dim=0) / regime_weights
             

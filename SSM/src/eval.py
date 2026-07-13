@@ -56,8 +56,7 @@ def evaluate():
     data_dir = '../../datalake/ssm_tensors/'
     col_info = joblib.load(os.path.join(data_dir, 'columns.pkl'))
     scaler = joblib.load(os.path.join(data_dir, 'scaler.pkl'))
-    original_feature_cols = col_info['feature_columns']
-    scaler = joblib.load(os.path.join(data_dir, 'scaler.pkl'))
+    feature_cols = col_info['feature_columns']
     target_cols = col_info['target_columns']
     
     demand_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
@@ -73,21 +72,12 @@ def evaluate():
     num_regimes = 4
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
-    fourier_cols = [c for c in original_feature_cols if '_sin_k' in c or '_cos_k' in c]
-    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in original_feature_cols else []
-    
-    # Restrict input features strictly to the 5 specified categories
-    feature_cols = demand_cols + gen_cols + fourier_cols + calendar_cols + weather_cols
-    known_columns = fourier_cols + calendar_cols + weather_cols
+    fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
+    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in feature_cols else []
+    embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
+    macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
+    known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
-    
-    # Extract scale/center values for demand and generation targets
-    cols_to_scale = [c for c in original_feature_cols if not c.endswith('_available')]
-    demand_scales = np.array([scaler.scale_[cols_to_scale.index(c)] for c in demand_cols])
-    demand_centers = np.array([scaler.center_[cols_to_scale.index(c)] for c in demand_cols])
-    
-    gen_scales = np.array([scaler.scale_[cols_to_scale.index(c)] for c in gen_cols])
-    gen_centers = np.array([scaler.center_[cols_to_scale.index(c)] for c in gen_cols])
     
     model = LatentSSM(
         input_dim=len(feature_cols),
@@ -97,11 +87,7 @@ def evaluate():
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
         num_regimes=num_regimes,
-        fourier_dim=len(fourier_cols),
-        demand_scale=demand_scales,
-        demand_center=demand_centers,
-        gen_scale=gen_scales,
-        gen_center=gen_centers
+        fourier_dim=len(fourier_cols)
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     
@@ -243,13 +229,13 @@ def evaluate():
     gen_scales = np.array([scaler.scale_[cols_to_scale.index(target_cols[i])] for i in gen_idx])
     gen_centers = np.array([scaler.center_[cols_to_scale.index(target_cols[i])] for i in gen_idx])
     
-    # Unscale predictions and targets (predictions are already unscaled by the model)
-    raw_demand_mean = demand_mean
-    raw_demand_var = demand_var
+    # Unscale predictions and targets
+    raw_demand_mean = demand_mean * demand_scales + demand_centers
+    raw_demand_var = demand_var * (demand_scales ** 2)
     raw_true_demand = true_demand * demand_scales + demand_centers
     
-    raw_gen_mean = gen_mean
-    raw_gen_var = gen_var
+    raw_gen_mean = gen_mean * gen_scales + gen_centers
+    raw_gen_var = gen_var * (gen_scales ** 2)
     raw_true_gen = true_gen * gen_scales + gen_centers
     
     calc_metrics(raw_demand_mean, raw_demand_var, raw_true_demand, mask_demand, "Demand")
