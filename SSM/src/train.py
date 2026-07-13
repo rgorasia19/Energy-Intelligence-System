@@ -235,7 +235,7 @@ def train():
             
             print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand NLL: {val_metrics_sum['loss_demand']:.4f})")
             
-            mlflow.log_metrics({
+            metrics_to_log = {
                 "train_loss": train_loss,
                 "val_loss": val_loss,
                 "val_demand_nll": val_metrics_sum['loss_demand'],
@@ -243,7 +243,17 @@ def train():
                 "train_kl_z": train_metrics_sum['kl_z'],
                 "train_kl_r": train_metrics_sum['kl_r'],
                 "train_entropy_r": train_metrics_sum['entropy_r']
-            }, step=epoch)
+            }
+            # Sanitize metrics to avoid MLflow REST API crash on NaN/Inf
+            sanitized_metrics = {}
+            for k, v in metrics_to_log.items():
+                if np.isnan(v) or np.isinf(v):
+                    print(f"WARNING: Metric {k} is {v}, replacing with 0.0 for MLflow logging.")
+                    sanitized_metrics[k] = 0.0
+                else:
+                    sanitized_metrics[k] = float(v)
+                    
+            mlflow.log_metrics(sanitized_metrics, step=epoch)
             
             early_stopping(val_loss)
             if early_stopping.early_stop:
