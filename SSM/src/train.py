@@ -50,7 +50,7 @@ def train():
     val_data = pd.read_parquet(os.path.join(data_dir, 'val.parquet'))
     
     col_info = joblib.load(os.path.join(data_dir, 'columns.pkl'))
-    feature_cols = col_info['feature_columns']
+    original_feature_cols = col_info['feature_columns']
     target_cols = col_info['target_columns']
     
     demand_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
@@ -67,13 +67,23 @@ def train():
     num_regimes = 4
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
-    fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
-    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in feature_cols else []
-    embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
-    macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
+    fourier_cols = [c for c in original_feature_cols if '_sin_k' in c or '_cos_k' in c]
+    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in original_feature_cols else []
     
-    known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
+    # Restrict input features strictly to the 5 specified categories
+    feature_cols = demand_cols + gen_cols + fourier_cols + calendar_cols + weather_cols
+    known_columns = fourier_cols + calendar_cols + weather_cols
     known_dim = len(known_columns)
+
+    # Load scaler and extract scales/centers for demand and generation targets
+    scaler = joblib.load(os.path.join(data_dir, 'scaler.pkl'))
+    cols_to_scale = [c for c in original_feature_cols if not c.endswith('_available')]
+    
+    demand_scales = np.array([scaler.scale_[cols_to_scale.index(c)] for c in demand_cols])
+    demand_centers = np.array([scaler.center_[cols_to_scale.index(c)] for c in demand_cols])
+    
+    gen_scales = np.array([scaler.scale_[cols_to_scale.index(c)] for c in gen_cols])
+    gen_centers = np.array([scaler.center_[cols_to_scale.index(c)] for c in gen_cols])
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
                                feature_columns=feature_cols, target_columns=target_cols,
@@ -84,7 +94,7 @@ def train():
     
     num_workers = 4 if device == "cuda" else 0
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, 
-                              num_workers=num_workers, pin_memory=(device=="cuda"))
+                               num_workers=num_workers, pin_memory=(device=="cuda"))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, 
                             num_workers=num_workers, pin_memory=(device=="cuda"))
 
@@ -97,11 +107,23 @@ def train():
         hidden_dim=hidden_dim,
         num_regimes=num_regimes,
         dropout=0.2,
-        fourier_dim=len(fourier_cols)
+        fourier_dim=len(fourier_cols),
+        demand_scale=demand_scales,
+        demand_center=demand_centers,
+        gen_scale=gen_scales,
+        gen_center=gen_centers
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1)
+    criterion = SSMLoss(
+        kl_z_weight=1.0, 
+        kl_r_weight=1.0, 
+        entropy_weight=0.1,
+        demand_scale=demand_scales,
+        demand_center=demand_centers,
+        gen_scale=gen_scales,
+        gen_center=gen_centers
+    )
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
