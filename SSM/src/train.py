@@ -123,7 +123,7 @@ def train():
         demand_center=demand_centers,
         gen_scale=gen_scales,
         gen_center=gen_centers
-    )
+    ).to(device)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
