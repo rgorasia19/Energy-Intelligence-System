@@ -25,8 +25,8 @@ if [[ "$MLFLOW_TRACKING_URI" != *"dagshub.com"* ]]; then
     exit 1
 fi
 
-echo "==> Moving to SSM/src and starting evaluation..."
+echo "==> Moving to SSM/src and running diagnostics..."
 cd SSM/src
-python diagnose.py
+python diagnostics.py
 
-echo "==> Evaluation sequence completed successfully!"
+echo "==> Diagnostics sequence completed successfully!"
