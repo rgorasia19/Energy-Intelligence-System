@@ -445,8 +445,8 @@ class SSMLoss(nn.Module):
             num_regimes = q_r.size(-1)
             q_r_flat = q_r.view(-1, num_regimes)
             
-            # Target magnitude for MI
-            target_mag = target_demand.norm(dim=-1, keepdim=True).view(-1, 1)
+            # Target magnitude for MI (use scaled targets to keep MI loss invariant to target scale)
+            target_mag = targets[:, :, demand_idx].norm(dim=-1, keepdim=True).view(-1, 1)
             regime_weights = q_r_flat.sum(dim=0) + 1e-8
             expected_mag_per_regime = (q_r_flat * target_mag).sum(dim=0) / regime_weights
             
