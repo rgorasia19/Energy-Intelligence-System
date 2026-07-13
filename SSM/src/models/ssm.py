@@ -373,20 +373,16 @@ class SSMLoss(nn.Module):
             return per_item
             
         def calc_coverage_penalty(mean, var, target, mask):
-            std = torch.sqrt(var)
-            lower = mean - 1.645 * std
-            upper = mean + 1.645 * std
-            scale = 10.0
-            coverage_approx = torch.sigmoid(scale * (target - lower)) * torch.sigmoid(scale * (upper - target))
+            std = torch.sqrt(var) + 1e-8
+            z = (target - mean) / std
+            # 90% interval corresponds to [-1.645, 1.645] in dimensionless z-score space
+            scale = 5.0
+            coverage_approx = torch.sigmoid(scale * (z + 1.645)) * torch.sigmoid(scale * (1.645 - z))
             coverage = (coverage_approx * mask).sum() / (mask.sum() + 1e-8)
             return (0.9 - coverage) ** 2
             
         loss_demand_per_item = calc_per_item_loss(demand_mean, demand_var, target_demand, mask_demand, True)
         loss_gen_per_item = calc_per_item_loss(gen_mean, gen_var, target_gen, mask_gen, False)
-        
-        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
-        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
-        coverage_loss = 10.0 * (coverage_demand + coverage_gen)
         
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
@@ -398,6 +394,12 @@ class SSMLoss(nn.Module):
             recon_loss = recon_loss.mean()
         else:
             recon_loss = total_recon_per_item.mean()
+            
+        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
+        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
+        # Weight coverage penalty relative to recon_loss magnitude so calibration pressure remains strong in raw space
+        coverage_weight = torch.clamp(recon_loss.detach().abs() * 0.5, min=10.0)
+        coverage_loss = coverage_weight * (coverage_demand + coverage_gen)
             
         # Macro Consistency Loss (Sum over horizon)
         sum_pred_demand = (demand_mean * mask_demand).sum(dim=1)
