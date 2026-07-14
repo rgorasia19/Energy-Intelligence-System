@@ -263,9 +263,9 @@ def evaluate():
         for _ in range(N):
             out = model(sample_enc, sample_dec, horizon, sample=True, tau=0.5)
             mean = out['demand_mean'][0, :, 0].cpu().numpy()
-            var = out['demand_var'][0, :, 0].cpu().numpy()
-            std = np.sqrt(var)
-            emissions = np.random.normal(loc=mean, scale=std)
+            scale = out['demand_scale'][0, :, 0].cpu().numpy()
+            nu = out['demand_nu'][0, :, 0].cpu().numpy()
+            emissions = mean + np.random.standard_t(df=np.maximum(nu, 2.001)) * scale
             samples.append(emissions)
             r_outs.append(np.argmax(out['sampled_r_seq'][0].cpu().numpy(), axis=-1))
             

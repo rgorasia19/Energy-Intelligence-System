@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 
 if sys.platform == 'win32' and sys.stdout.encoding.lower() != 'utf-8':
     sys.stdout.reconfigure(encoding='utf-8')
@@ -142,17 +143,6 @@ def train():
                 dec_targets = batch['decoder_targets'].to(device)
                 dec_masks = batch['decoder_mask'].to(device)
                 
-                # Noise Injection and Shocks
-                enc_inputs = enc_inputs + torch.randn_like(enc_inputs) * 0.05
-                dec_inputs = dec_inputs + torch.randn_like(dec_inputs) * 0.05
-                
-                # Inject synthetic target spike into a random segment (5% probability)
-                if torch.rand(1).item() < 0.05:
-                    spike_len = min(max_horizon, torch.randint(1, 4, (1,)).item())
-                    start_idx = torch.randint(0, max_horizon - spike_len + 1, (1,)).item()
-                    shock = torch.empty(dec_targets.shape[0], 1, 1, device=device).uniform_(1.2, 2.0)
-                    dec_targets[:, start_idx:start_idx+spike_len, :] = dec_targets[:, start_idx:start_idx+spike_len, :] * shock
-                
                 # Curriculum horizon
                 current_horizon = max_horizon
                 
@@ -164,13 +154,21 @@ def train():
                 
                 tau = max(0.5, 2.0 * (0.95 ** epoch))
                 
+                # Warmup + Cosine Annealing schedule for tf_ratio
+                warmup_epochs = max(1, int(epochs * 0.15))
+                if epoch < warmup_epochs:
+                    tf_ratio = 1.0
+                else:
+                    progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
+                    tf_ratio = 0.5 * (1.0 + math.cos(math.pi * progress))
+                
                 K = 5
                 enc_inputs_k = enc_inputs.repeat_interleave(K, dim=0)
                 dec_inputs_trunc_k = dec_inputs_trunc.repeat_interleave(K, dim=0)
                 dec_targets_trunc_k = dec_targets_trunc.repeat_interleave(K, dim=0)
                 dec_masks_trunc_k = dec_masks_trunc.repeat_interleave(K, dim=0)
                 
-                outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau)
+                outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau, tf_ratio=tf_ratio)
                 
                 loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.5, free_bits_r=1.0, k_samples=K)
                 
@@ -216,6 +214,7 @@ def train():
             mlflow.log_metrics({
                 "train_loss": train_loss,
                 "val_loss": val_loss,
+                "tf_ratio": tf_ratio,
                 "val_demand_nll": val_metrics_sum['loss_demand'],
                 "val_gen_nll": val_metrics_sum['loss_gen'],
                 "val_pinball_loss": val_metrics_sum['pinball_loss'],

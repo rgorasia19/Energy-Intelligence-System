@@ -120,7 +120,7 @@ class LatentSSM(nn.Module):
         f_emb = self.fourier_embed(fourier)
         return torch.cat([f_emb, other], dim=-1)
         
-    def forward(self, encoder_inputs, decoder_inputs, horizon, target_seq=None, sample=False, tau=1.0):
+    def forward(self, encoder_inputs, decoder_inputs, horizon, target_seq=None, sample=False, tau=1.0, tf_ratio=1.0):
         """
         encoder_inputs: [batch, seq_len, input_dim]
         decoder_inputs: [batch, horizon, known_dim]
@@ -172,21 +172,22 @@ class LatentSSM(nn.Module):
             # Prior Regime Transition
             r_prior_input = torch.cat([z_curr, r_curr, u_t], dim=-1)
             r_logits = self.prior_r_net(r_prior_input)
-            r_logits = r_logits + 10.0 * r_curr # Strong residual connection for persistence
             prior_r_logits_seq.append(r_logits)
             
-            if self.training and target_seq is not None:
-                # Use posterior samples during training to ground the continuous transition
-                r_logits_t = post_r_logits_seq[:, t, :]
-            else:
-                r_logits_t = r_logits
-                
+            # Sample prior and posterior regime states, then mix via per-sample mask
             if self.training:
-                r_next = self.sample_regime(r_logits_t, tau=tau, hard=False, k_blend=2)
+                r_prior = self.sample_regime(r_logits, tau=tau, hard=False, k_blend=2)
             elif sample:
-                r_next = self.sample_regime(r_logits_t, tau=tau, hard=True)
+                r_prior = self.sample_regime(r_logits, tau=tau, hard=True)
             else:
-                r_next = F.one_hot(torch.argmax(r_logits_t, dim=-1), num_classes=self.num_regimes).float()
+                r_prior = F.one_hot(torch.argmax(r_logits, dim=-1), num_classes=self.num_regimes).float()
+                
+            if self.training and target_seq is not None:
+                r_post = self.sample_regime(post_r_logits_seq[:, t, :], tau=tau, hard=False, k_blend=2)
+                mask_tf_r = (torch.rand(batch_size, 1, device=device) < tf_ratio).float()
+                r_next = mask_tf_r * r_post + (1.0 - mask_tf_r) * r_prior
+            else:
+                r_next = r_prior
                 
             # Prior Continuous Transition (Mixture of Experts)
             # z_curr: [batch, latent_dim * 2]
@@ -205,7 +206,7 @@ class LatentSSM(nn.Module):
             expert_outputs_d = torch.stack(expert_outputs_d, dim=1) # [batch, num_regimes, latent_dim * 2]
             expert_outputs_g = torch.stack(expert_outputs_g, dim=1)
             
-            # Weighted sum over experts using Gumbel-Softmax r_next
+            # Weighted sum over experts using r_next
             z_out_d = torch.einsum('bk,bkd->bd', r_next, expert_outputs_d)
             z_out_g = torch.einsum('bk,bkd->bd', r_next, expert_outputs_g)
             
@@ -218,17 +219,18 @@ class LatentSSM(nn.Module):
             prior_z_mean_seq.append(z_mean)
             prior_z_var_seq.append(z_var)
             
-            if self.training and target_seq is not None:
-                z_mean_t = post_z_mean_seq[:, t, :]
-                z_var_t = post_z_var_seq[:, t, :]
-            else:
-                z_mean_t = z_mean
-                z_var_t = z_var
-                
+            # Sample prior and posterior continuous states, then mix via per-sample mask
             if self.training or sample:
-                z_next = self.reparameterize_gaussian(z_mean_t, z_var_t)
+                z_prior = self.reparameterize_gaussian(z_mean, z_var)
             else:
-                z_next = z_mean_t
+                z_prior = z_mean
+                
+            if self.training and target_seq is not None:
+                z_post = self.reparameterize_gaussian(post_z_mean_seq[:, t, :], post_z_var_seq[:, t, :])
+                mask_tf_z = (torch.rand(batch_size, 1, device=device) < tf_ratio).float()
+                z_next = mask_tf_z * z_post + (1.0 - mask_tf_z) * z_prior
+            else:
+                z_next = z_prior
                 
             sampled_r_seq.append(r_next)
             sampled_z_seq.append(z_next)
