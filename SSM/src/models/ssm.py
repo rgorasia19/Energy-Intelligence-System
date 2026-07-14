@@ -174,7 +174,13 @@ class LatentSSM(nn.Module):
             r_logits = self.prior_r_net(r_prior_input)
             prior_r_logits_seq.append(r_logits)
             
-            # Sample prior and posterior regime states, then mix via per-sample mask
+            # Generate shared per-sample teacher forcing mask between z and r
+            if self.training and target_seq is not None:
+                mask_tf = (torch.rand(batch_size, 1, device=device) < tf_ratio)
+            else:
+                mask_tf = None
+                
+            # Sample prior and posterior regime states, then select branch with torch.where
             if self.training:
                 r_prior = self.sample_regime(r_logits, tau=tau, hard=False, k_blend=2)
             elif sample:
@@ -182,10 +188,10 @@ class LatentSSM(nn.Module):
             else:
                 r_prior = F.one_hot(torch.argmax(r_logits, dim=-1), num_classes=self.num_regimes).float()
                 
-            if self.training and target_seq is not None:
+            if self.training and target_seq is not None and mask_tf is not None:
                 r_post = self.sample_regime(post_r_logits_seq[:, t, :], tau=tau, hard=False, k_blend=2)
-                mask_tf_r = (torch.rand(batch_size, 1, device=device) < tf_ratio).float()
-                r_next = mask_tf_r * r_post + (1.0 - mask_tf_r) * r_prior
+                mask_tf_r = mask_tf.expand_as(r_post)
+                r_next = torch.where(mask_tf_r, r_post, r_prior)
             else:
                 r_next = r_prior
                 
@@ -219,19 +225,20 @@ class LatentSSM(nn.Module):
             prior_z_mean_seq.append(z_mean)
             prior_z_var_seq.append(z_var)
             
-            # Sample prior and posterior continuous states, then mix via per-sample mask
-            if self.training or sample:
-                z_prior = self.reparameterize_gaussian(z_mean, z_var)
-            else:
+            # Avoid sampling prior during teacher-forced training steps (use z_mean for prior branch)
+            if self.training and target_seq is not None and mask_tf is not None:
                 z_prior = z_mean
-                
-            if self.training and target_seq is not None:
                 z_post = self.reparameterize_gaussian(post_z_mean_seq[:, t, :], post_z_var_seq[:, t, :])
-                mask_tf_z = (torch.rand(batch_size, 1, device=device) < tf_ratio).float()
-                z_next = mask_tf_z * z_post + (1.0 - mask_tf_z) * z_prior
+                mask_tf_z = mask_tf.expand_as(z_post)
+                z_next = torch.where(mask_tf_z, z_post, z_prior)
+            elif sample:
+                z_next = self.reparameterize_gaussian(z_mean, z_var)
             else:
-                z_next = z_prior
+                z_next = z_mean
                 
+            # Clamp/normalize latent states to prevent runaway trajectories during rollout training
+            z_next = torch.clamp(z_next, min=-10.0, max=10.0)
+            
             sampled_r_seq.append(r_next)
             sampled_z_seq.append(z_next)
             
@@ -440,6 +447,7 @@ class SSMLoss(nn.Module):
         util_loss = 0.0
         semantic_anchor_loss = 0.0
         
+        latent_consistency_loss = 0.0
         if post_z_mean is not None:
             # KL for continuous state
             kl_z_raw = self.kl_divergence_gaussian(post_z_mean, post_z_var, prior_z_mean, prior_z_var)
@@ -448,6 +456,9 @@ class SSMLoss(nn.Module):
             # KL for discrete regime
             kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
             kl_r = torch.clamp(kl_r_raw - free_bits_r, min=0.0).mean()
+            
+            # Latent Consistency Loss (penalize divergence between posterior and prior latent states)
+            latent_consistency_loss = F.mse_loss(prior_z_mean, post_z_mean.detach())
             
             # Entropy Regularization
             entropy_r = self.entropy_categorical(post_r_logits).mean()
@@ -480,10 +491,12 @@ class SSMLoss(nn.Module):
             else:
                 semantic_anchor_loss = 0.0
             
-        # KL Annealing
-        cycle_length = max(1, total_epochs // 2)
-        cycle_frac = (epoch % cycle_length) / cycle_length
-        anneal_factor = min(1.0, cycle_frac / 0.5)
+        # KL Annealing: gradual monotonic warmup to avoid posterior/prior fighting early training
+        warmup_kl = max(1, int(total_epochs * 0.2))
+        if epoch < warmup_kl:
+            anneal_factor = 0.01 + 0.99 * (epoch / warmup_kl)
+        else:
+            anneal_factor = 1.0
         
         # Latent Smoothness Loss
         if prior_z_mean.size(1) > 1:
@@ -492,7 +505,7 @@ class SSMLoss(nn.Module):
         else:
             smoothness_loss = 0.0
         
-        total_loss = recon_loss + pinball_loss + coverage_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
+        total_loss = recon_loss + pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -503,9 +516,15 @@ class SSMLoss(nn.Module):
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
             'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
+            'latent_consistency_loss': latent_consistency_loss.item() if isinstance(latent_consistency_loss, torch.Tensor) else latent_consistency_loss,
             'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss,
             'smoothness_loss': smoothness_loss.item() if isinstance(smoothness_loss, torch.Tensor) else smoothness_loss,
             'util_loss': util_loss.item() if isinstance(util_loss, torch.Tensor) else util_loss,
             'avg_nu_demand': demand_nu.mean().item(),
-            'avg_nu_gen': gen_nu.mean().item()
+            'avg_nu_gen': gen_nu.mean().item(),
+            'z_mean_norm': prior_z_mean.norm(dim=-1).mean().item(),
+            'z_std_mean': torch.sqrt(prior_z_var).mean().item(),
+            'demand_scale_mean': demand_scale.mean().item(),
+            'gen_scale_mean': gen_scale.mean().item(),
+            'anneal_factor': anneal_factor
         }

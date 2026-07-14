@@ -131,7 +131,7 @@ def train():
         for epoch in range(epochs):
             model.train()
             train_loss = 0.0
-            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0}
+            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0, 'z_mean_norm': 0, 'z_std_mean': 0, 'demand_scale_mean': 0, 'gen_scale_mean': 0, 'latent_consistency_loss': 0, 'anneal_factor': 0}
             
             # Curriculum: grow horizon linearly over first 50% of epochs
             curriculum_frac = min(1.0, (epoch + 1) / max(1, epochs / 2))
@@ -154,13 +154,13 @@ def train():
                 
                 tau = max(0.5, 2.0 * (0.95 ** epoch))
                 
-                # Warmup + Cosine Annealing schedule for tf_ratio
-                warmup_epochs = max(1, int(epochs * 0.15))
+                # Warmup + Cosine Annealing schedule for tf_ratio (decay only to ~0.25 initially)
+                warmup_epochs = max(1, int(epochs * 0.2))
                 if epoch < warmup_epochs:
                     tf_ratio = 1.0
                 else:
                     progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
-                    tf_ratio = 0.5 * (1.0 + math.cos(math.pi * progress))
+                    tf_ratio = 0.25 + 0.75 * 0.5 * (1.0 + math.cos(math.pi * progress))
                 
                 K = 5
                 enc_inputs_k = enc_inputs.repeat_interleave(K, dim=0)
@@ -186,7 +186,7 @@ def train():
             
             model.eval()
             val_loss = 0.0
-            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0}
+            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0, 'z_mean_norm': 0, 'z_std_mean': 0, 'demand_scale_mean': 0, 'gen_scale_mean': 0, 'latent_consistency_loss': 0, 'anneal_factor': 0}
             
             with torch.no_grad():
                 for batch in val_loader:
@@ -197,7 +197,7 @@ def train():
                     
                     outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, tau=0.5) # use 0.5 in eval for harder choices
                     
-                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epochs, epochs, free_bits_z=0.0, free_bits_r=0.0)
+                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.0, free_bits_r=0.0)
                     
                     val_loss += loss.item()
                     for k in val_metrics_sum:
@@ -215,6 +215,7 @@ def train():
                 "train_loss": train_loss,
                 "val_loss": val_loss,
                 "tf_ratio": tf_ratio,
+                "anneal_factor": val_metrics_sum['anneal_factor'],
                 "val_demand_nll": val_metrics_sum['loss_demand'],
                 "val_gen_nll": val_metrics_sum['loss_gen'],
                 "val_pinball_loss": val_metrics_sum['pinball_loss'],
@@ -222,6 +223,13 @@ def train():
                 "train_kl_r": train_metrics_sum['kl_r'],
                 "train_entropy_r": train_metrics_sum['entropy_r'],
                 "train_util_loss": train_metrics_sum['util_loss'],
+                "train_latent_consistency": train_metrics_sum['latent_consistency_loss'],
+                "train_z_mean_norm": train_metrics_sum['z_mean_norm'],
+                "train_z_std_mean": train_metrics_sum['z_std_mean'],
+                "val_z_mean_norm": val_metrics_sum['z_mean_norm'],
+                "val_z_std_mean": val_metrics_sum['z_std_mean'],
+                "val_demand_scale_mean": val_metrics_sum['demand_scale_mean'],
+                "val_gen_scale_mean": val_metrics_sum['gen_scale_mean'],
                 "val_avg_nu_demand": val_metrics_sum['avg_nu_demand'],
                 "val_avg_nu_gen": val_metrics_sum['avg_nu_gen'],
                 "beta_demand_mean": model.beta_demand.mean().item(),
