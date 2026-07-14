@@ -116,8 +116,13 @@ def run_diagnostics():
             batch_g_samples = []
             for _ in range(N):
                 outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=True, tau=1.0)
-                d_sample = np.random.normal(loc=outputs['demand_mean'].cpu().numpy(), scale=np.sqrt(outputs['demand_var'].cpu().numpy()))
-                g_sample = np.random.normal(loc=outputs['gen_mean'].cpu().numpy(), scale=np.sqrt(outputs['gen_var'].cpu().numpy()))
+                d_scale = outputs['demand_scale'].cpu().numpy()
+                d_nu = outputs['demand_nu'].cpu().numpy()
+                d_sample = outputs['demand_mean'].cpu().numpy() + np.random.standard_t(df=np.maximum(d_nu, 2.001)) * d_scale
+                
+                g_scale = outputs['gen_scale'].cpu().numpy()
+                g_nu = outputs['gen_nu'].cpu().numpy()
+                g_sample = outputs['gen_mean'].cpu().numpy() + np.random.standard_t(df=np.maximum(g_nu, 2.001)) * g_scale
                 batch_d_samples.append(d_sample)
                 batch_g_samples.append(g_sample)
             

@@ -137,12 +137,14 @@ def evaluate():
                 outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=True, tau=1.0)
                 
                 d_mean = outputs['demand_mean'].cpu().numpy()
-                d_var = outputs['demand_var'].cpu().numpy()
+                d_scale = outputs['demand_scale'].cpu().numpy()
+                d_nu = outputs['demand_nu'].cpu().numpy()
                 g_mean = outputs['gen_mean'].cpu().numpy()
-                g_var = outputs['gen_var'].cpu().numpy()
+                g_scale = outputs['gen_scale'].cpu().numpy()
+                g_nu = outputs['gen_nu'].cpu().numpy()
                 
-                d_sample = np.random.normal(loc=d_mean, scale=np.sqrt(d_var))
-                g_sample = np.random.normal(loc=g_mean, scale=np.sqrt(g_var))
+                d_sample = d_mean + np.random.standard_t(df=np.maximum(d_nu, 2.001)) * d_scale
+                g_sample = g_mean + np.random.standard_t(df=np.maximum(g_nu, 2.001)) * g_scale
                 
                 batch_demand_samples.append(d_sample)
                 batch_gen_samples.append(g_sample)

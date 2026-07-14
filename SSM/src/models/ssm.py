@@ -77,21 +77,41 @@ class LatentSSM(nn.Module):
         )
         
         self.demand_mean = nn.Linear(hidden_dim, demand_dim)
-        self.demand_raw_var = nn.Linear(hidden_dim, demand_dim)
+        self.demand_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
+        self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
+        
         self.gen_mean = nn.Linear(hidden_dim, gen_dim)
-        self.gen_raw_var = nn.Linear(hidden_dim, gen_dim)
+        self.gen_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
+        self.gen_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
+        
+        # Structural horizon scaling parameters beta (one per target feature)
+        self.beta_demand = nn.Parameter(torch.tensor([0.1] * demand_dim, dtype=torch.float32))
+        self.beta_gen = nn.Parameter(torch.tensor([0.1] * gen_dim, dtype=torch.float32))
         
     def _get_var(self, raw_var):
         # Softplus with variance floor to prevent deterministic collapse, scaled by learned alpha
         base_var = torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
         return torch.exp(self.log_alpha) * base_var
         
+    def _get_scale(self, raw_scale):
+        base_scale = torch.clamp(F.softplus(raw_scale) + 1e-3, max=10.0)
+        return torch.exp(0.5 * self.log_alpha) * base_scale
+        
+    def _get_nu(self, raw_nu):
+        return 2.0 + F.softplus(raw_nu) + 1e-2
+        
     def reparameterize_gaussian(self, mu, var):
         std = torch.sqrt(var)
         eps = torch.randn_like(std)
         return mu + eps * std
         
-    def sample_regime(self, logits, tau=1.0, hard=True):
+    def sample_regime(self, logits, tau=1.0, hard=True, k_blend=1):
+        if self.training and k_blend > 1 and not hard:
+            # Top-K=2 Soft Expert Blending during training:
+            topk_vals, topk_idx = torch.topk(logits, k=min(k_blend, logits.size(-1)), dim=-1)
+            mask = torch.full_like(logits, -float('inf'))
+            mask.scatter_(-1, topk_idx, topk_vals)
+            return F.gumbel_softmax(mask, tau=tau, hard=False, dim=-1)
         return F.gumbel_softmax(logits, tau=tau, hard=hard, dim=-1)
         
     def _process_known(self, u):
@@ -161,7 +181,9 @@ class LatentSSM(nn.Module):
             else:
                 r_logits_t = r_logits
                 
-            if self.training or sample:
+            if self.training:
+                r_next = self.sample_regime(r_logits_t, tau=tau, hard=False, k_blend=2)
+            elif sample:
                 r_next = self.sample_regime(r_logits_t, tau=tau, hard=True)
             else:
                 r_next = F.one_hot(torch.argmax(r_logits_t, dim=-1), num_classes=self.num_regimes).float()
@@ -232,11 +254,34 @@ class LatentSSM(nn.Module):
         
         demand_features = self.emit_demand(emit_input_d)
         demand_mean = self.demand_mean(demand_features)
-        demand_var = self._get_var(self.demand_raw_var(demand_features))
         
         gen_features = self.emit_gen(emit_input_g)
         gen_mean = self.gen_mean(gen_features)
-        gen_var = self._get_var(self.gen_raw_var(gen_features))
+        
+        demand_scale_experts = torch.stack([self._get_scale(head(demand_features)) for head in self.demand_scale_heads], dim=2)
+        demand_nu_experts = torch.stack([self._get_nu(head(demand_features)) for head in self.demand_nu_heads], dim=2)
+        
+        gen_scale_experts = torch.stack([self._get_scale(head(gen_features)) for head in self.gen_scale_heads], dim=2)
+        gen_nu_experts = torch.stack([self._get_nu(head(gen_features)) for head in self.gen_nu_heads], dim=2)
+        
+        # Mix across active regime vector sampled_r_seq [batch_size, horizon, num_regimes]
+        demand_scale_net = torch.einsum('bhr,bhrd->bhd', sampled_r_seq, demand_scale_experts)
+        demand_nu = torch.einsum('bhr,bhrd->bhd', sampled_r_seq, demand_nu_experts)
+        
+        gen_scale_net = torch.einsum('bhr,bhrd->bhd', sampled_r_seq, gen_scale_experts)
+        gen_nu = torch.einsum('bhr,bhrd->bhd', sampled_r_seq, gen_nu_experts)
+        
+        # Structural Horizon Scaling Factor: 1 + Softplus(beta) * sqrt((h + 1) / H)
+        h_steps = torch.arange(1, horizon + 1, device=device, dtype=torch.float32)
+        horizon_factor_d = 1.0 + F.softplus(self.beta_demand.view(1, 1, -1)) * torch.sqrt(h_steps / float(horizon)).view(1, horizon, 1)
+        horizon_factor_g = 1.0 + F.softplus(self.beta_gen.view(1, 1, -1)) * torch.sqrt(h_steps / float(horizon)).view(1, horizon, 1)
+        
+        demand_scale = demand_scale_net * horizon_factor_d
+        gen_scale = gen_scale_net * horizon_factor_g
+        
+        # Exact analytical variance for Student-t: nu / (nu - 2) * scale^2
+        demand_var = (demand_nu / (demand_nu - 2.0)) * (demand_scale ** 2)
+        gen_var = (gen_nu / (gen_nu - 2.0)) * (gen_scale ** 2)
         
         return {
             'z0_mean': z0_mean,
@@ -251,19 +296,24 @@ class LatentSSM(nn.Module):
             'sampled_z_seq': sampled_z_seq,
             'sampled_r_seq': sampled_r_seq,
             'demand_mean': demand_mean,
+            'demand_scale': demand_scale,
+            'demand_nu': demand_nu,
             'demand_var': demand_var,
             'gen_mean': gen_mean,
+            'gen_scale': gen_scale,
+            'gen_nu': gen_nu,
             'gen_var': gen_var
         }
 
 class SSMLoss(nn.Module):
-    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1):
+    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.2, pinball_weight=0.5, occ_weight=10.0, min_occupancy=0.15):
         super().__init__()
         self.kl_z_weight = kl_z_weight
         self.kl_r_weight = kl_r_weight
         self.entropy_weight = entropy_weight
-        
-
+        self.pinball_weight = pinball_weight
+        self.occ_weight = occ_weight
+        self.min_occupancy = min_occupancy
         
     def kl_divergence_gaussian(self, q_mu, q_var, p_mu, p_var):
         # KL(q || p) = 0.5 * [log(p_var/q_var) + (q_var + (q_mu - p_mu)^2)/p_var - 1]
@@ -285,8 +335,13 @@ class SSMLoss(nn.Module):
         
     def forward(self, model_outputs, targets, masks, demand_idx, gen_idx, epoch, total_epochs, free_bits_z=0.1, free_bits_r=1.0, k_samples=1):
         demand_mean = model_outputs['demand_mean']
+        demand_scale = model_outputs['demand_scale']
+        demand_nu = model_outputs['demand_nu']
         demand_var = model_outputs['demand_var']
+        
         gen_mean = model_outputs['gen_mean']
+        gen_scale = model_outputs['gen_scale']
+        gen_nu = model_outputs['gen_nu']
         gen_var = model_outputs['gen_var']
         
         target_demand = targets[:, :, demand_idx]
@@ -295,22 +350,35 @@ class SSMLoss(nn.Module):
         mask_demand = masks[:, :, demand_idx]
         mask_gen = masks[:, :, gen_idx]
         
-        # Calculate per-item NLL and CRPS
-        def calc_per_item_loss(mean, var, target, mask, is_demand):
-            nll = 0.5 * torch.log(var) + (4.0 / 2.0) * torch.log(1.0 + ((target - mean) ** 2) / (3.0 * var))
-            std = torch.sqrt(var)
-            z = (target - mean) / (std + 1e-8)
+        # Calculate per-item Student-t NLL and Normal-CRPS approximation
+        def calc_student_t_nll(mean, scale, nu, target, mask):
+            lgamma_plus = torch.lgamma((nu + 1.0) / 2.0)
+            lgamma_nu = torch.lgamma(nu / 2.0)
+            log_const = lgamma_plus - lgamma_nu - 0.5 * torch.log(torch.pi * nu) - torch.log(scale + 1e-8)
+            log_kernel = -0.5 * (nu + 1.0) * torch.log(1.0 + ((target - mean) ** 2) / (nu * (scale ** 2) + 1e-8))
+            log_prob = log_const + log_kernel
+            
+            std = torch.sqrt((nu / (nu - 2.0)) * (scale ** 2)) + 1e-8
+            z = (target - mean) / std
             normal = torch.distributions.Normal(0, 1)
             crps = std * (z * (2 * normal.cdf(z) - 1) + 2 * torch.exp(normal.log_prob(z)) - 1 / torch.sqrt(torch.tensor(torch.pi)))
             
-            combined = (nll + crps) * mask
+            combined = (-log_prob + crps) * mask
             per_item = combined.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
-            
-            # Variance penalty
-            var_penalty = -0.1 * torch.log(var) * mask
-            per_item += var_penalty.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
-            
             return per_item
+            
+        def calc_pinball_loss(mean, scale, nu, target, mask):
+            # Cornish-Fisher expansion for extreme quantiles q=0.90, 0.95, 0.99
+            qs = [0.90, 0.95, 0.99]
+            zs = [1.28155, 1.64485, 2.32635]
+            total_pinball = 0.0
+            for q, z in zip(qs, zs):
+                t_q = z + (z**3 + z) / (4.0 * nu) + (5.0*z**5 + 16.0*z**3 + 3.0*z) / (96.0 * (nu ** 2))
+                y_hat = mean + scale * t_q
+                err = target - y_hat
+                pinball_q = torch.max(q * err, (q - 1.0) * err) * mask
+                total_pinball += pinball_q.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
+            return total_pinball / len(qs)
             
         def calc_coverage_penalty(mean, var, target, mask):
             std = torch.sqrt(var)
@@ -321,8 +389,12 @@ class SSMLoss(nn.Module):
             coverage = (coverage_approx * mask).sum() / (mask.sum() + 1e-8)
             return (0.9 - coverage) ** 2
             
-        loss_demand_per_item = calc_per_item_loss(demand_mean, demand_var, target_demand, mask_demand, True)
-        loss_gen_per_item = calc_per_item_loss(gen_mean, gen_var, target_gen, mask_gen, False)
+        loss_demand_per_item = calc_student_t_nll(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
+        loss_gen_per_item = calc_student_t_nll(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
+        
+        pinball_demand = calc_pinball_loss(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
+        pinball_gen = calc_pinball_loss(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
+        pinball_loss = self.pinball_weight * (pinball_demand + pinball_gen).mean()
         
         coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
         coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
@@ -350,8 +422,6 @@ class SSMLoss(nn.Module):
         
         consistency_loss = 0.1 * (consistency_loss_demand + consistency_loss_gen)
             
-        recon_loss = recon_loss + coverage_loss + consistency_loss
-        
         # 2. Latent Consistency (KL Divergence)
         post_z_mean = model_outputs['post_z_mean_seq']
         post_z_var = model_outputs['post_z_var_seq']
@@ -393,9 +463,9 @@ class SSMLoss(nn.Module):
             # Maximize variance of expected target magnitude across regimes
             mi_loss = -0.5 * torch.var(expected_mag_per_regime)
             
-            # Penalize dead regimes (force utilization)
+            # Penalize dead regimes via quadratic Minimum Occupancy Penalty
             avg_q_r = q_r_flat.mean(dim=0)
-            util_loss = 1.0 * (num_regimes * avg_q_r * torch.log(num_regimes * avg_q_r + 1e-8)).mean()
+            util_loss = self.occ_weight * torch.sum(torch.clamp(self.min_occupancy - avg_q_r, min=0.0) ** 2)
             
             # Semantic Anchor: Force Regime 0 for >90th percentile demand
             demand_scalar = target_demand.mean(dim=-1)
@@ -409,8 +479,6 @@ class SSMLoss(nn.Module):
                 semantic_anchor_loss = 0.0
             
         # KL Annealing
-        # (Annealing factor is passed from train.py, or we can use the default if not provided)
-        # We will assume train.py passes it in some form, but we'll re-calculate just in case:
         cycle_length = max(1, total_epochs // 2)
         cycle_frac = (epoch % cycle_length) / cycle_length
         anneal_factor = min(1.0, cycle_frac / 0.5)
@@ -422,16 +490,20 @@ class SSMLoss(nn.Module):
         else:
             smoothness_loss = 0.0
         
-        total_loss = recon_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
+        total_loss = recon_loss + pinball_loss + coverage_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
             'loss_gen': loss_gen_per_item.mean().item(),
+            'pinball_loss': pinball_loss.item() if isinstance(pinball_loss, torch.Tensor) else pinball_loss,
             'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
             'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
             'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss,
-            'smoothness_loss': smoothness_loss.item() if isinstance(smoothness_loss, torch.Tensor) else smoothness_loss
+            'smoothness_loss': smoothness_loss.item() if isinstance(smoothness_loss, torch.Tensor) else smoothness_loss,
+            'util_loss': util_loss.item() if isinstance(util_loss, torch.Tensor) else util_loss,
+            'avg_nu_demand': demand_nu.mean().item(),
+            'avg_nu_gen': gen_nu.mean().item()
         }

@@ -130,7 +130,7 @@ def train():
         for epoch in range(epochs):
             model.train()
             train_loss = 0.0
-            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0}
+            train_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0}
             
             # Curriculum: grow horizon linearly over first 50% of epochs
             curriculum_frac = min(1.0, (epoch + 1) / max(1, epochs / 2))
@@ -188,7 +188,7 @@ def train():
             
             model.eval()
             val_loss = 0.0
-            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0}
+            val_metrics_sum = {'loss_demand': 0, 'loss_gen': 0, 'pinball_loss': 0, 'kl_z': 0, 'kl_r': 0, 'entropy_r': 0, 'util_loss': 0, 'avg_nu_demand': 0, 'avg_nu_gen': 0}
             
             with torch.no_grad():
                 for batch in val_loader:
@@ -211,16 +211,22 @@ def train():
             
             scheduler.step(val_loss)
             
-            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand NLL: {val_metrics_sum['loss_demand']:.4f})")
+            print(f"Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.4f} - Val Loss: {val_loss:.4f} (Demand NLL: {val_metrics_sum['loss_demand']:.4f}, Pinball: {val_metrics_sum['pinball_loss']:.4f})")
             
             mlflow.log_metrics({
                 "train_loss": train_loss,
                 "val_loss": val_loss,
                 "val_demand_nll": val_metrics_sum['loss_demand'],
                 "val_gen_nll": val_metrics_sum['loss_gen'],
+                "val_pinball_loss": val_metrics_sum['pinball_loss'],
                 "train_kl_z": train_metrics_sum['kl_z'],
                 "train_kl_r": train_metrics_sum['kl_r'],
-                "train_entropy_r": train_metrics_sum['entropy_r']
+                "train_entropy_r": train_metrics_sum['entropy_r'],
+                "train_util_loss": train_metrics_sum['util_loss'],
+                "val_avg_nu_demand": val_metrics_sum['avg_nu_demand'],
+                "val_avg_nu_gen": val_metrics_sum['avg_nu_gen'],
+                "beta_demand_mean": model.beta_demand.mean().item(),
+                "beta_gen_mean": model.beta_gen.mean().item()
             }, step=epoch)
             
             early_stopping(val_loss)
