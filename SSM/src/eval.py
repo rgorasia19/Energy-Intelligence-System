@@ -106,6 +106,21 @@ def evaluate():
     print("--- Running Deterministic Inference ---")
     model.eval()
     
+    # Print diagnostics at eval time
+    with torch.no_grad():
+        diag_batch = next(iter(test_loader))
+        val_encoder = diag_batch['encoder_inputs'].to(device)
+        val_decoder = diag_batch['decoder_inputs'].to(device)
+        val_targets = diag_batch['decoder_targets'].to(device)
+        
+        outputs = model(val_encoder, val_decoder, horizon, sample=False)
+        
+        print(f"Demand scale range: {outputs['demand_scale'].min():.3f} - {outputs['demand_scale'].max():.3f}")
+        print(f"Demand nu range: {outputs['demand_nu'].min():.1f} - {outputs['demand_nu'].max():.1f}")
+        print(f"Demand var range: {outputs['demand_var'].min():.0f} - {outputs['demand_var'].max():.0f}")
+        print(f"Target demand std: {val_targets[:, :, demand_idx].std():.0f}")
+        print("-" * 40)
+    
     all_demand_mean = []
     all_demand_var = []
     all_true_demand = []
