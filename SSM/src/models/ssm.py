@@ -34,10 +34,10 @@ class LatentSSM(nn.Module):
         
         # 2. Bidirectional Smoothing Posterior
         # Takes future targets + known futures to infer optimal z_t and r_t
-        self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=True)
-        self.post_r_logits = nn.Linear(hidden_dim * 2, num_regimes)
-        self.post_z_mean = nn.Linear(hidden_dim * 2, latent_dim * 2)
-        self.post_z_raw_var = nn.Linear(hidden_dim * 2, latent_dim * 2)
+        self.posterior_lstm = nn.LSTM(demand_dim + gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=False)
+        self.post_r_logits = nn.Linear(hidden_dim, num_regimes)
+        self.post_z_mean = nn.Linear(hidden_dim, latent_dim * 2)
+        self.post_z_raw_var = nn.Linear(hidden_dim, latent_dim * 2)
         
         # 3. Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
@@ -242,9 +242,6 @@ class LatentSSM(nn.Module):
             else:
                 z_next = z_mean
                 
-            # Clamp/normalize latent states to prevent runaway trajectories during rollout training
-            z_next = torch.clamp(z_next, min=-10.0, max=10.0)
-            
             sampled_r_seq.append(r_next)
             sampled_z_seq.append(z_next)
             
@@ -420,6 +417,11 @@ class SSMLoss(nn.Module):
         coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
         coverage_loss = 5.0 * (coverage_demand + coverage_gen)
         
+        # Direct Mean Anchor Loss: prevents the mean from drifting when variance grows
+        l1_demand = (torch.abs(demand_mean - target_demand) * mask_demand).sum() / (mask_demand.sum() + 1e-8)
+        l1_gen = (torch.abs(gen_mean - target_gen) * mask_gen).sum() / (mask_gen.sum() + 1e-8)
+        mean_anchor_loss = 2.0 * (l1_demand + l1_gen)
+        
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
         if k_samples > 1:
@@ -515,8 +517,11 @@ class SSMLoss(nn.Module):
             smoothness_loss = 0.1 * (diff ** 2).sum(dim=-1).mean()
         else:
             smoothness_loss = 0.0
+            
+        # Latent L2 Regularization (replacing clamp)
+        latent_l2_reg = 0.01 * (prior_z_mean ** 2).mean()
         
-        total_loss = recon_loss + pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
+        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),

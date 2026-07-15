@@ -102,7 +102,8 @@ def train():
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)
-    criterion = SSMLoss(kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.1)
+    # β-VAE: increase KL weight
+    criterion = SSMLoss(kl_z_weight=5.0, kl_r_weight=2.0, entropy_weight=0.1)
     
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     early_stopping = EarlyStopping(patience=10, min_delta=1e-4)
@@ -170,7 +171,8 @@ def train():
                 
                 outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau, tf_ratio=tf_ratio)
                 
-                loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.5, free_bits_r=1.0, k_samples=K)
+                # Reduce free bits 10x
+                loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.05, free_bits_r=0.1, k_samples=K)
                 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
