@@ -92,18 +92,18 @@ class LatentSSM(nn.Module):
         
     def _get_var(self, raw_var):
         # Softplus with variance floor to prevent deterministic collapse, scaled by learned alpha
-        base_var = torch.clamp(F.softplus(raw_var) + 1e-4, max=10.0)
+        base_var = torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
         clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
         return torch.exp(clamped_alpha) * base_var
         
     def _get_scale(self, raw_scale, target='demand'):
-        base_scale = torch.clamp(F.softplus(raw_scale) + 1e-4, max=10.0)
+        base_scale = torch.clamp(F.softplus(raw_scale) + 1e-2, max=10.0)
         alpha = self.log_alpha_demand if target == 'demand' else self.log_alpha_gen
         clamped_alpha = torch.clamp(alpha, -2.0, 2.0)
         return torch.exp(0.5 * clamped_alpha) * base_scale
         
     def _get_nu(self, raw_nu):
-        return 2.0 + F.softplus(raw_nu) + 1e-2
+        return 3.0 + F.softplus(raw_nu)
         
     def reparameterize_gaussian(self, mu, var):
         std = torch.sqrt(var)
@@ -470,9 +470,6 @@ class SSMLoss(nn.Module):
             kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
             kl_r = torch.clamp(kl_r_raw - free_bits_r, min=0.0).mean()
             
-            # Latent Consistency Loss (penalize divergence between posterior and prior latent states)
-            latent_consistency_loss = F.mse_loss(prior_z_mean, post_z_mean.detach())
-            
             # Entropy Regularization
             entropy_r = self.entropy_categorical(post_r_logits).mean()
             
@@ -500,7 +497,7 @@ class SSMLoss(nn.Module):
             if extreme_mask.any():
                 extreme_logits = post_r_logits[extreme_mask]
                 target_regime = torch.zeros(extreme_logits.size(0), dtype=torch.long, device=extreme_logits.device)
-                semantic_anchor_loss = 1.0 * F.cross_entropy(extreme_logits, target_regime)
+                semantic_anchor_loss = 10.0 * F.cross_entropy(extreme_logits, target_regime)
             else:
                 semantic_anchor_loss = 0.0
             
@@ -521,7 +518,7 @@ class SSMLoss(nn.Module):
         # Latent L2 Regularization (replacing clamp)
         latent_l2_reg = 0.01 * (prior_z_mean ** 2).mean()
         
-        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
+        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),

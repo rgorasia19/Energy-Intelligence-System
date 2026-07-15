@@ -155,13 +155,8 @@ def train():
                 
                 tau = max(0.5, 2.0 * (0.95 ** epoch))
                 
-                # Warmup + Cosine Annealing schedule for tf_ratio (decay only to ~0.25 initially)
-                warmup_epochs = max(1, int(epochs * 0.2))
-                if epoch < warmup_epochs:
-                    tf_ratio = 1.0
-                else:
-                    progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
-                    tf_ratio = 0.25 + 0.75 * 0.5 * (1.0 + math.cos(math.pi * progress))
+                # Drastically reduce teacher forcing to force the prior to learn
+                tf_ratio = max(0.0, 0.5 * (1.0 - epoch / epochs))
                 
                 K = 5
                 enc_inputs_k = enc_inputs.repeat_interleave(K, dim=0)
