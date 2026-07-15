@@ -72,20 +72,27 @@ class LatentSSM(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
+        self.demand_mean = nn.Linear(hidden_dim, demand_dim)
+        self.demand_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
+        self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
+        
         self.emit_gen = nn.Sequential(
             nn.Linear(latent_dim + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
-        
-        self.demand_mean = nn.Linear(hidden_dim, demand_dim)
-        self.demand_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
-        self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
-        
         self.gen_mean = nn.Linear(hidden_dim, gen_dim)
         self.gen_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
         self.gen_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
         
+        # Initialize scale heads to start near 1.0 (exp(0) = 1.0)
+        for head in self.demand_scale_heads:
+            nn.init.constant_(head.bias, 0.0)
+            nn.init.normal_(head.weight, 0.0, 0.01)
+        for head in self.gen_scale_heads:
+            nn.init.constant_(head.bias, 0.0)
+            nn.init.normal_(head.weight, 0.0, 0.01)
+
         # Structural horizon scaling parameters beta (one per target feature)
         self.beta_demand = nn.Parameter(torch.tensor([0.1] * demand_dim, dtype=torch.float32))
         self.beta_gen = nn.Parameter(torch.tensor([0.1] * gen_dim, dtype=torch.float32))
@@ -97,13 +104,15 @@ class LatentSSM(nn.Module):
         return torch.exp(clamped_alpha) * base_var
         
     def _get_scale(self, raw_scale, target='demand'):
-        base_scale = F.softplus(raw_scale + 0.5) + 1e-2
+        log_scale = torch.clamp(raw_scale, min=-5.0, max=5.0)
+        base_scale = torch.exp(log_scale)
         alpha = self.log_alpha_demand if target == 'demand' else self.log_alpha_gen
-        clamped_alpha = torch.clamp(alpha, -2.0, 2.0)
-        return torch.exp(0.5 * clamped_alpha) * base_scale
+        clamped_alpha = torch.clamp(alpha, -0.5, 0.5)
+        modulation = torch.exp(0.1 * clamped_alpha)
+        return base_scale * modulation
         
     def _get_nu(self, raw_nu):
-        return 3.0 + F.softplus(raw_nu)
+        return 10.0 + F.softplus(raw_nu)
         
     def reparameterize_gaussian(self, mu, var):
         std = torch.sqrt(var)
