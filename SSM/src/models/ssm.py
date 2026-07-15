@@ -371,20 +371,13 @@ class SSMLoss(nn.Module):
         mask_gen = masks[:, :, gen_idx]
         
         # Calculate per-item Student-t NLL and Normal-CRPS approximation
-        def calc_student_t_nll(mean, scale, nu, target, mask):
-            lgamma_plus = torch.lgamma((nu + 1.0) / 2.0)
-            lgamma_nu = torch.lgamma(nu / 2.0)
-            log_const = lgamma_plus - lgamma_nu - 0.5 * torch.log(torch.pi * nu) - torch.log(scale + 1e-8)
-            log_kernel = -0.5 * (nu + 1.0) * torch.log(1.0 + ((target - mean) ** 2) / (nu * (scale ** 2) + 1e-8))
-            log_prob = log_const + log_kernel
-            
+        def calc_crps_loss(mean, scale, nu, target, mask):
             std = torch.sqrt((nu / (nu - 2.0)) * (scale ** 2)) + 1e-8
             z = (target - mean) / std
             normal = torch.distributions.Normal(0, 1)
             crps = std * (z * (2 * normal.cdf(z) - 1) + 2 * torch.exp(normal.log_prob(z)) - 1 / torch.sqrt(torch.tensor(torch.pi)))
             
-            combined = (-log_prob + crps) * mask
-            per_item = combined.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
+            per_item = (crps * mask).sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
             return per_item
             
         def calc_pinball_loss(mean, scale, nu, target, mask):
@@ -414,8 +407,8 @@ class SSMLoss(nn.Module):
             
             return violation_penalty
             
-        loss_demand_per_item = calc_student_t_nll(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
-        loss_gen_per_item = calc_student_t_nll(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
+        loss_demand_per_item = calc_crps_loss(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
+        loss_gen_per_item = calc_crps_loss(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
         
         pinball_demand = calc_pinball_loss(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
         pinball_gen = calc_pinball_loss(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
