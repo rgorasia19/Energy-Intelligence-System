@@ -21,6 +21,8 @@ class LatentSSM(nn.Module):
         
         # Learnable variance scaling parameter (alpha) initialized to zeros per latent feature
         self.log_alpha = nn.Parameter(torch.zeros(latent_dim * 2))
+        self.log_alpha_demand = nn.Parameter(torch.zeros(demand_dim))
+        self.log_alpha_gen = nn.Parameter(torch.zeros(gen_dim))
         
         # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
@@ -94,9 +96,10 @@ class LatentSSM(nn.Module):
         clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
         return torch.exp(clamped_alpha) * base_var
         
-    def _get_scale(self, raw_scale):
+    def _get_scale(self, raw_scale, target='demand'):
         base_scale = torch.clamp(F.softplus(raw_scale) + 1e-3, max=10.0)
-        clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
+        alpha = self.log_alpha_demand if target == 'demand' else self.log_alpha_gen
+        clamped_alpha = torch.clamp(alpha, -2.0, 2.0)
         return torch.exp(0.5 * clamped_alpha) * base_scale
         
     def _get_nu(self, raw_nu):
@@ -222,7 +225,8 @@ class LatentSSM(nn.Module):
             z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim, dim=-1)
             
             z_mean = torch.cat([z_mean_d, z_mean_g], dim=-1)
-            z_var = torch.cat([self._get_var(z_raw_var_d), self._get_var(z_raw_var_g)], dim=-1)
+            z_raw_var = torch.cat([z_raw_var_d, z_raw_var_g], dim=-1)
+            z_var = self._get_var(z_raw_var)
             
             prior_z_mean_seq.append(z_mean)
             prior_z_var_seq.append(z_var)
@@ -269,10 +273,10 @@ class LatentSSM(nn.Module):
         gen_features = self.emit_gen(emit_input_g)
         gen_mean = self.gen_mean(gen_features)
         
-        demand_scale_experts = torch.stack([self._get_scale(head(demand_features)) for head in self.demand_scale_heads], dim=2)
+        demand_scale_experts = torch.stack([self._get_scale(head(demand_features), 'demand') for head in self.demand_scale_heads], dim=2)
         demand_nu_experts = torch.stack([self._get_nu(head(demand_features)) for head in self.demand_nu_heads], dim=2)
         
-        gen_scale_experts = torch.stack([self._get_scale(head(gen_features)) for head in self.gen_scale_heads], dim=2)
+        gen_scale_experts = torch.stack([self._get_scale(head(gen_features), 'gen') for head in self.gen_scale_heads], dim=2)
         gen_nu_experts = torch.stack([self._get_nu(head(gen_features)) for head in self.gen_nu_heads], dim=2)
         
         # Mix across active regime vector sampled_r_seq [batch_size, horizon, num_regimes]
