@@ -85,12 +85,12 @@ class LatentSSM(nn.Module):
         self.gen_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
         self.gen_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes)])
         
-        # Initialize scale heads to start near 1.0 (exp(0) = 1.0)
+        # Initialize scale heads to start with a strong baseline bias
         for head in self.demand_scale_heads:
-            nn.init.constant_(head.bias, 0.0)
+            nn.init.constant_(head.bias, 0.3)
             nn.init.normal_(head.weight, 0.0, 0.01)
         for head in self.gen_scale_heads:
-            nn.init.constant_(head.bias, 0.0)
+            nn.init.constant_(head.bias, 0.3)
             nn.init.normal_(head.weight, 0.0, 0.01)
 
         # Structural horizon scaling parameters beta (one per target feature)
@@ -104,8 +104,7 @@ class LatentSSM(nn.Module):
         return torch.exp(clamped_alpha) * base_var
         
     def _get_scale(self, raw_scale, target='demand'):
-        log_scale = torch.clamp(raw_scale, min=-5.0, max=5.0)
-        base_scale = torch.exp(log_scale)
+        base_scale = F.softplus(raw_scale + 2.0) + 1e-2
         alpha = self.log_alpha_demand if target == 'demand' else self.log_alpha_gen
         clamped_alpha = torch.clamp(alpha, -0.5, 0.5)
         modulation = torch.exp(0.1 * clamped_alpha)
@@ -426,6 +425,13 @@ class SSMLoss(nn.Module):
         coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
         coverage_loss = 5.0 * (coverage_demand + coverage_gen)
         
+        # Scale Floor Loss (Fix #1: hard constraint to prevent scale collapse)
+        min_scale_demand = 0.05 * target_demand.std(dim=(0, 1), keepdim=True).clamp(min=0.1)
+        min_scale_gen = 0.05 * target_gen.std(dim=(0, 1), keepdim=True).clamp(min=0.1)
+        scale_floor_loss_d = torch.relu(min_scale_demand - demand_scale).mean()
+        scale_floor_loss_g = torch.relu(min_scale_gen - gen_scale).mean()
+        scale_floor_loss = 10.0 * (scale_floor_loss_d + scale_floor_loss_g)
+        
         # Direct Mean Anchor Loss: prevents the mean from drifting when variance grows
         l1_demand = (torch.abs(demand_mean - target_demand) * mask_demand).sum() / (mask_demand.sum() + 1e-8)
         l1_gen = (torch.abs(gen_mean - target_gen) * mask_gen).sum() / (mask_gen.sum() + 1e-8)
@@ -527,7 +533,7 @@ class SSMLoss(nn.Module):
         # Latent L2 Regularization (replacing clamp)
         latent_l2_reg = 0.01 * (prior_z_mean ** 2).mean()
         
-        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
+        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + scale_floor_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -548,5 +554,6 @@ class SSMLoss(nn.Module):
             'z_std_mean': torch.sqrt(prior_z_var).mean().item(),
             'demand_scale_mean': demand_scale.mean().item(),
             'gen_scale_mean': gen_scale.mean().item(),
+            'scale_floor_loss': scale_floor_loss.item() if isinstance(scale_floor_loss, torch.Tensor) else scale_floor_loss,
             'anneal_factor': anneal_factor
         }
