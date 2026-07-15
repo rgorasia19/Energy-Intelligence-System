@@ -405,7 +405,12 @@ class SSMLoss(nn.Module):
             violation = torch.relu(lower - target) + torch.relu(target - upper)
             violation_penalty = (violation * mask).sum() / (mask.sum() + 1e-8)
             
-            return violation_penalty
+            # 2. Width Loss (force minimum width for 90% interval, data std is ~1 so width should be ~3.29)
+            width = upper - lower
+            width_penalty = torch.relu(3.0 - width)
+            width_loss = (width_penalty * mask).sum() / (mask.sum() + 1e-8)
+            
+            return violation_penalty, width_loss
             
         loss_demand_per_item = calc_crps_loss(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
         loss_gen_per_item = calc_crps_loss(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
@@ -414,9 +419,11 @@ class SSMLoss(nn.Module):
         pinball_gen = calc_pinball_loss(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
         pinball_loss = self.pinball_weight * (pinball_demand + pinball_gen).mean()
         
-        coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
-        coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
-        coverage_loss = 5.0 * (coverage_demand + coverage_gen)
+        violation_demand, width_loss_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
+        violation_gen, width_loss_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
+        
+        coverage_loss = 5.0 * (violation_demand + violation_gen)
+        width_loss = 100.0 * (width_loss_demand + width_loss_gen)
         
         # Scale Floor Loss (Fix #1: hard constraint to prevent scale collapse)
         min_scale_demand = 0.05 * target_demand.std(dim=(0, 1), keepdim=True).clamp(min=0.1)
@@ -526,7 +533,7 @@ class SSMLoss(nn.Module):
         # Latent L2 Regularization (replacing clamp)
         latent_l2_reg = 0.01 * (prior_z_mean ** 2).mean()
         
-        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + scale_floor_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
+        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + width_loss + scale_floor_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -536,6 +543,7 @@ class SSMLoss(nn.Module):
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
             'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
+            'width_loss': width_loss.item() if isinstance(width_loss, torch.Tensor) else width_loss,
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
             'latent_consistency_loss': latent_consistency_loss.item() if isinstance(latent_consistency_loss, torch.Tensor) else latent_consistency_loss,
             'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss,
