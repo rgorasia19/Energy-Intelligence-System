@@ -19,8 +19,8 @@ class LatentSSM(nn.Module):
         )
         self.processed_known_dim = known_dim - fourier_dim + fourier_embed_dim
         
-        # Learnable variance scaling parameter (alpha) initialized to 2.0 (ln(2) approx 0.693)
-        self.log_alpha = nn.Parameter(torch.tensor([0.693]))
+        # Learnable variance scaling parameter (alpha) initialized to zeros per latent feature
+        self.log_alpha = nn.Parameter(torch.zeros(latent_dim * 2))
         
         # 1. Past Encoder (for z0)
         self.encoder_gru = nn.GRU(input_dim, hidden_dim, batch_first=True)
@@ -91,11 +91,13 @@ class LatentSSM(nn.Module):
     def _get_var(self, raw_var):
         # Softplus with variance floor to prevent deterministic collapse, scaled by learned alpha
         base_var = torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
-        return torch.exp(self.log_alpha) * base_var
+        clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
+        return torch.exp(clamped_alpha) * base_var
         
     def _get_scale(self, raw_scale):
         base_scale = torch.clamp(F.softplus(raw_scale) + 1e-3, max=10.0)
-        return torch.exp(0.5 * self.log_alpha) * base_scale
+        clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
+        return torch.exp(0.5 * clamped_alpha) * base_scale
         
     def _get_nu(self, raw_nu):
         return 2.0 + F.softplus(raw_nu) + 1e-2
@@ -389,14 +391,36 @@ class SSMLoss(nn.Module):
                 total_pinball += pinball_q.sum(dim=(1, 2)) / (mask.sum(dim=(1, 2)) + 1e-8)
             return total_pinball / len(qs)
             
+        def calc_interval_pinball(mean, var, target, mask):
+            std = torch.sqrt(var)
+            q_low = mean - 1.645 * std
+            q_high = mean + 1.645 * std
+            
+            err_low = target - q_low
+            pinball_low = torch.max(0.05 * err_low, (0.05 - 1.0) * err_low)
+            
+            err_high = target - q_high
+            pinball_high = torch.max(0.95 * err_high, (0.95 - 1.0) * err_high)
+            
+            loss = (pinball_low + pinball_high) * mask
+            return loss.sum() / (mask.sum() + 1e-8)
+
         def calc_coverage_penalty(mean, var, target, mask):
             std = torch.sqrt(var)
             lower = mean - 1.645 * std
             upper = mean + 1.645 * std
+            
+            # 1. Per-timestep, per-item violation
+            violation = torch.relu(lower - target) + torch.relu(target - upper)
+            violation_penalty = (violation * mask).sum() / (mask.sum() + 1e-8)
+            
+            # 4. Horizon-wise calibration
             scale = 10.0
             coverage_approx = torch.sigmoid(scale * (target - lower)) * torch.sigmoid(scale * (upper - target))
-            coverage = (coverage_approx * mask).sum() / (mask.sum() + 1e-8)
-            return (0.9 - coverage) ** 2
+            coverage_t = (coverage_approx * mask).sum(dim=(0, 2)) / (mask.sum(dim=(0, 2)) + 1e-8)
+            horizon_calibration_loss = ((coverage_t - 0.9) ** 2).mean()
+            
+            return violation_penalty + 10.0 * horizon_calibration_loss
             
         loss_demand_per_item = calc_student_t_nll(demand_mean, demand_scale, demand_nu, target_demand, mask_demand)
         loss_gen_per_item = calc_student_t_nll(gen_mean, gen_scale, gen_nu, target_gen, mask_gen)
@@ -407,7 +431,11 @@ class SSMLoss(nn.Module):
         
         coverage_demand = calc_coverage_penalty(demand_mean, demand_var, target_demand, mask_demand)
         coverage_gen = calc_coverage_penalty(gen_mean, gen_var, target_gen, mask_gen)
-        coverage_loss = 10.0 * (coverage_demand + coverage_gen)
+        coverage_loss = 20.0 * coverage_demand + 50.0 * coverage_gen
+        
+        interval_pinball_demand = calc_interval_pinball(demand_mean, demand_var, target_demand, mask_demand)
+        interval_pinball_gen = calc_interval_pinball(gen_mean, gen_var, target_gen, mask_gen)
+        interval_pinball_loss = 2.0 * (interval_pinball_demand + interval_pinball_gen)
         
         total_recon_per_item = loss_demand_per_item + loss_gen_per_item
         
@@ -505,7 +533,7 @@ class SSMLoss(nn.Module):
         else:
             smoothness_loss = 0.0
         
-        total_loss = recon_loss + pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
+        total_loss = recon_loss + pinball_loss + interval_pinball_loss + coverage_loss + consistency_loss + 0.5 * latent_consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -514,6 +542,7 @@ class SSMLoss(nn.Module):
             'kl_z': kl_z.item() if isinstance(kl_z, torch.Tensor) else kl_z,
             'kl_r': kl_r.item() if isinstance(kl_r, torch.Tensor) else kl_r,
             'entropy_r': entropy_r.item() if isinstance(entropy_r, torch.Tensor) else entropy_r,
+            'interval_pinball_loss': interval_pinball_loss.item() if isinstance(interval_pinball_loss, torch.Tensor) else interval_pinball_loss,
             'coverage_loss': coverage_loss.item() if isinstance(coverage_loss, torch.Tensor) else coverage_loss,
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
             'latent_consistency_loss': latent_consistency_loss.item() if isinstance(latent_consistency_loss, torch.Tensor) else latent_consistency_loss,
