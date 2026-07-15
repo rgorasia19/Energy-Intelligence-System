@@ -383,12 +383,15 @@ class SSMLoss(nn.Module):
             return per_item
             
         def calc_pinball_loss(mean, scale, nu, target, mask):
-            # Cornish-Fisher expansion for extreme quantiles q=0.90, 0.95, 0.99
-            qs = [0.90, 0.95, 0.99]
-            zs = [1.28155, 1.64485, 2.32635]
+            # Symmetric Cornish-Fisher expansion for quantiles q=0.05, 0.50, 0.95
+            qs = [0.05, 0.50, 0.95]
+            zs = [-1.64485, 0.0, 1.64485]
             total_pinball = 0.0
             for q, z in zip(qs, zs):
-                t_q = z + (z**3 + z) / (4.0 * nu) + (5.0*z**5 + 16.0*z**3 + 3.0*z) / (96.0 * (nu ** 2))
+                if z == 0.0:
+                    t_q = 0.0
+                else:
+                    t_q = z + (z**3 + z) / (4.0 * nu) + (5.0*z**5 + 16.0*z**3 + 3.0*z) / (96.0 * (nu ** 2))
                 y_hat = mean + scale * t_q
                 err = target - y_hat
                 pinball_q = torch.max(q * err, (q - 1.0) * err) * mask
