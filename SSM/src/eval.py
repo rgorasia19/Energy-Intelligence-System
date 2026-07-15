@@ -116,10 +116,20 @@ def evaluate():
         outputs = model(val_encoder, val_decoder, horizon, sample=False)
         
         demand_var = (outputs['demand_nu'] / (outputs['demand_nu'] - 2.0)) * (outputs['demand_scale'] ** 2)
+        target_demand_std = val_targets[:, :, demand_idx].std()
+        
         print(f"Demand scale range: {outputs['demand_scale'].min():.3f} - {outputs['demand_scale'].max():.3f}")
         print(f"Demand nu range: {outputs['demand_nu'].min():.1f} - {outputs['demand_nu'].max():.1f}")
         print(f"Demand var range: {demand_var.min():.3f} - {demand_var.max():.3f}")
-        print(f"Target demand std: {val_targets[:, :, demand_idx].std():.0f}")
+        
+        scale_percentiles = torch.quantile(
+            outputs['demand_scale'].flatten(), 
+            torch.tensor([0.01, 0.25, 0.5, 0.75, 0.99], device=device)
+        )
+        print(f"Demand Scale Percentiles (1%, 25%, 50%, 75%, 99%):")
+        print(f"  {scale_percentiles.cpu().numpy()}")
+        print(f"Target Demand Std: {target_demand_std:.4f}")
+        print(f"Ratio scale/target_std: {(outputs['demand_scale'] / target_demand_std).mean():.2f}")
         print("-" * 40)
     
     all_demand_mean = []
