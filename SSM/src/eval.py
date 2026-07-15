@@ -118,7 +118,7 @@ def evaluate():
         demand_var = (outputs['demand_nu'] / (outputs['demand_nu'] - 2.0)) * (outputs['demand_scale'] ** 2)
         print(f"Demand scale range: {outputs['demand_scale'].min():.3f} - {outputs['demand_scale'].max():.3f}")
         print(f"Demand nu range: {outputs['demand_nu'].min():.1f} - {outputs['demand_nu'].max():.1f}")
-        print(f"Demand var range: {demand_var.min():.0f} - {demand_var.max():.0f}")
+        print(f"Demand var range: {demand_var.min():.3f} - {demand_var.max():.3f}")
         print(f"Target demand std: {val_targets[:, :, demand_idx].std():.0f}")
         print("-" * 40)
     

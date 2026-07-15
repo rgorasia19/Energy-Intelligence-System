@@ -92,12 +92,12 @@ class LatentSSM(nn.Module):
         
     def _get_var(self, raw_var):
         # Softplus with variance floor to prevent deterministic collapse, scaled by learned alpha
-        base_var = torch.clamp(F.softplus(raw_var) + 1e-2, max=10.0)
+        base_var = F.softplus(raw_var) + 1e-2
         clamped_alpha = torch.clamp(self.log_alpha, -2.0, 2.0)
         return torch.exp(clamped_alpha) * base_var
         
     def _get_scale(self, raw_scale, target='demand'):
-        base_scale = torch.clamp(F.softplus(raw_scale) + 1e-2, max=10.0)
+        base_scale = F.softplus(raw_scale + 0.5) + 1e-2
         alpha = self.log_alpha_demand if target == 'demand' else self.log_alpha_gen
         clamped_alpha = torch.clamp(alpha, -2.0, 2.0)
         return torch.exp(0.5 * clamped_alpha) * base_scale
