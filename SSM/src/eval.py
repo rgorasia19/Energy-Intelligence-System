@@ -131,6 +131,41 @@ def evaluate():
         print(f"Target Demand Std: {target_demand_std:.4f}")
         print(f"Ratio scale/target_std: {(outputs['demand_scale'] / target_demand_std).mean():.2f}")
         print("-" * 40)
+
+        demand_scale = outputs['demand_scale']
+        target_demand = val_targets[:, :, demand_idx]
+        demand_nu = outputs['demand_nu']
+    
+        var_factor = demand_nu / (demand_nu - 2.0)
+        std = torch.sqrt(var_factor) * demand_scale
+    
+        z_score = 1.645
+        ci_width = 2.0 * z_score * std
+    
+        print(f"90% CI width - Median: {ci_width.median():.3f}")
+        print(f"90% CI width - Mean: {ci_width.mean():.3f}")
+        print(f"Target demand std: {target_demand.std():.3f}")
+        print(f"Target CI width (1.5x): {1.5 * target_demand.std():.3f}")
+        print(f"\nRatio (actual / target): {ci_width.mean() / (1.5 * target_demand.std()):.2f}")
+        print("-" * 40)
+    
+        demand_mean = outputs['demand_mean']
+        target_demand = val_targets[:, :, demand_idx]
+        
+        print(f"Target demand range: [{target_demand.min():.1f}, {target_demand.max():.1f}]")
+        print(f"Target demand mean: {target_demand.mean():.1f}, std: {target_demand.std():.4f}")
+        print(f"Predicted mean range: [{demand_mean.min():.1f}, {demand_mean.max():.1f}]")
+        print(f"Predicted mean mean: {demand_mean.mean():.1f}, std: {demand_mean.std():.4f}")
+        
+        # Compute mean error IN THE SAME SPACE
+        mean_error = torch.abs(demand_mean - target_demand)
+        print(f"Mean error range: [{mean_error.min():.1f}, {mean_error.max():.1f}]")
+        print(f"Mean error mean: {mean_error.mean():.1f}")
+        print(f"Mean error as multiple of target_std: {mean_error.mean() / target_demand.std():.1f}x")
+        
+        # Check if targets/predictions are normalized vs raw
+        print(f"\nAre targets normalized? {target_demand.max() <= 1.0 and target_demand.min() >= -1.0}")
+        print(f"Are predictions normalized? {demand_mean.max() <= 1.0 and demand_mean.min() >= -1.0}")
     
     all_demand_mean = []
     all_demand_var = []
