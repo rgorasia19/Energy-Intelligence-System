@@ -232,6 +232,10 @@ class LatentSSM(nn.Module):
             z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim, dim=-1)
             z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim, dim=-1)
             
+            # Fix #5: Initialize prior networks with identity (residual connection)
+            z_mean_d = z_mean_d + z_prev[:, :self.latent_dim]
+            z_mean_g = z_mean_g + z_prev[:, self.latent_dim:]
+            
             z_mean = torch.cat([z_mean_d, z_mean_g], dim=-1)
             z_raw_var = torch.cat([z_raw_var_d, z_raw_var_g], dim=-1)
             z_var = self._get_var(z_raw_var)
@@ -239,12 +243,10 @@ class LatentSSM(nn.Module):
             prior_z_mean_seq.append(z_mean)
             prior_z_var_seq.append(z_var)
             
-            # Avoid sampling prior during teacher-forced training steps (use z_mean for prior branch)
-            if self.training and target_seq is not None and mask_tf is not None:
-                z_prior = z_mean
-                z_post = self.reparameterize_gaussian(post_z_mean_seq[:, t, :], post_z_var_seq[:, t, :])
-                mask_tf_z = mask_tf.expand_as(z_post)
-                z_next = torch.where(mask_tf_z, z_post, z_prior)
+            # Fix #1: Remove teacher forcing
+            # Always sample from the prior to force it to learn true dynamics
+            if self.training and target_seq is not None:
+                z_next = self.reparameterize_gaussian(z_mean, z_var)
             elif sample:
                 z_next = self.reparameterize_gaussian(z_mean, z_var)
             else:
@@ -479,11 +481,14 @@ class SSMLoss(nn.Module):
         if post_z_mean is not None:
             # KL for continuous state
             kl_z_raw = self.kl_divergence_gaussian(post_z_mean, post_z_var, prior_z_mean, prior_z_var)
-            kl_z = torch.clamp(kl_z_raw - free_bits_z, min=0.0).mean()
-            
             # KL for discrete regime
             kl_r_raw = self.kl_divergence_categorical(post_r_logits, prior_r_logits)
-            kl_r = torch.clamp(kl_r_raw - free_bits_r, min=0.0).mean()
+            
+            # Fix #2: Increase free bits to prevent posterior collapse
+            self.free_bits_z = 0.5
+            self.free_bits_r = 0.5
+            kl_z = torch.clamp(kl_z_raw - self.free_bits_z, min=0.0).mean()
+            kl_r = torch.clamp(kl_r_raw - self.free_bits_r, min=0.0).mean()
             
             # Entropy Regularization
             entropy_r = self.entropy_categorical(post_r_logits).mean()
