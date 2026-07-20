@@ -260,8 +260,9 @@ def evaluate():
             all_true_gen.append(dec_targets[:, :, gen_idx])
             all_mask_gen.append(dec_masks[:, :, gen_idx])
             
-            # For simplicity, just append the last r_seq
-            all_z_seq.append(outputs['sampled_z_seq'].cpu().numpy())
+            # Concatenate split latents for evaluation plots/stats
+            sampled_z = torch.cat([outputs['sampled_z_d_seq'], outputs['sampled_z_g_seq']], dim=-1)
+            all_z_seq.append(sampled_z.cpu().numpy())
             all_r_seq.append(outputs['sampled_r_seq'].cpu().numpy())
             
     # Concatenate all batches
