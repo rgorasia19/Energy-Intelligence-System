@@ -63,7 +63,7 @@ def train():
     seq_len = 60
     horizon = 30
     batch_size = 256
-    latent_dim = 8
+    latent_dim = 16
     hidden_dim = 64
     num_regimes = 4
 

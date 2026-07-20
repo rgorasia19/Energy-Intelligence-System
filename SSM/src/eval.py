@@ -67,7 +67,7 @@ def evaluate():
     
     seq_len = 60
     horizon = 30
-    latent_dim = 8
+    latent_dim = 16
     hidden_dim = 64
     num_regimes = 4
     
@@ -162,6 +162,31 @@ def evaluate():
         print(f"Mean error range: [{mean_error.min():.1f}, {mean_error.max():.1f}]")
         print(f"Mean error mean: {mean_error.mean():.1f}")
         print(f"Mean error as multiple of target_std: {mean_error.mean() / target_demand.std():.1f}x")
+        
+        # Posterior vs Prior gap
+        outputs_post = model(val_encoder, val_decoder, horizon, target_seq=val_targets, sample=False)
+        post_mean_error = torch.abs(outputs_post['demand_mean'] - target_demand)
+        print(f"\nPrior-only MAE: {mean_error.mean():.4f}")
+        print(f"Posterior+Prior MAE: {post_mean_error.mean():.4f}")
+        print(f"Prior-only vs Posterior+Prior MAE gap: {mean_error.mean() - post_mean_error.mean():.4f}")
+        
+        
+        # Computed generation stats
+        gen_idx = [target_cols.index(c) for c in gen_cols]
+        gen_mean = outputs['gen_mean']
+        target_gen = val_targets[:, :, gen_idx]
+        gen_var = (outputs['gen_nu'] / (outputs['gen_nu'] - 2.0)) * (outputs['gen_scale'] ** 2)
+        target_gen_std = target_gen.std()
+        
+        print(f"\nGeneration scale range: {outputs['gen_scale'].min():.3f} - {outputs['gen_scale'].max():.3f}")
+        print(f"Target Generation Std: {target_gen_std:.4f}")
+        print(f"Gen Ratio scale/target_std: {(outputs['gen_scale'] / target_gen_std).mean():.2f}")
+        
+        gen_mean_error = torch.abs(gen_mean - target_gen)
+        print(f"Gen Mean error range: [{gen_mean_error.min():.1f}, {gen_mean_error.max():.1f}]")
+        print(f"Gen Mean error mean: {gen_mean_error.mean():.1f}")
+        print(f"Gen Mean error as multiple of target_std: {gen_mean_error.mean() / target_gen_std:.1f}x")
+        print("-" * 40)
         
         # Check if targets/predictions are normalized vs raw
         print(f"\nAre targets normalized? {target_demand.max() <= 1.0 and target_demand.min() >= -1.0}")
