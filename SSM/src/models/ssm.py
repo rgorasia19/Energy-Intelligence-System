@@ -3,9 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim=16, hidden_dim=64, num_regimes=4, dropout=0.2, fourier_dim=12, fourier_embed_dim=16):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, num_regimes=4, dropout=0.2, fourier_dim=12, fourier_embed_dim=16):
         super().__init__()
-        self.latent_dim = latent_dim
+        self.latent_dim_demand = latent_dim_demand
+        self.latent_dim_gen = latent_dim_gen
         self.demand_dim = demand_dim
         self.gen_dim = gen_dim
         self.known_dim = known_dim
@@ -20,8 +21,8 @@ class LatentSSM(nn.Module):
         self.processed_known_dim = known_dim - fourier_dim + fourier_embed_dim
         
         # Learnable variance scaling parameter (alpha) initialized to zeros per latent feature
-        self.log_alpha_d = nn.Parameter(torch.zeros(latent_dim))
-        self.log_alpha_g = nn.Parameter(torch.zeros(latent_dim))
+        self.log_alpha_d = nn.Parameter(torch.zeros(latent_dim_demand))
+        self.log_alpha_g = nn.Parameter(torch.zeros(latent_dim_gen))
         self.log_alpha_demand = nn.Parameter(torch.zeros(demand_dim))
         self.log_alpha_gen = nn.Parameter(torch.zeros(gen_dim))
         
@@ -29,10 +30,10 @@ class LatentSSM(nn.Module):
         # Separate pathways for demand and gen
         self.encoder_gru_d = nn.GRU(input_dim, hidden_dim, batch_first=True)
         self.encoder_gru_g = nn.GRU(input_dim, hidden_dim, batch_first=True)
-        self.z0_mean_d = nn.Linear(hidden_dim, latent_dim)
-        self.z0_raw_var_d = nn.Linear(hidden_dim, latent_dim)
-        self.z0_mean_g = nn.Linear(hidden_dim, latent_dim)
-        self.z0_raw_var_g = nn.Linear(hidden_dim, latent_dim)
+        self.z0_mean_d = nn.Linear(hidden_dim, latent_dim_demand)
+        self.z0_raw_var_d = nn.Linear(hidden_dim, latent_dim_demand)
+        self.z0_mean_g = nn.Linear(hidden_dim, latent_dim_gen)
+        self.z0_raw_var_g = nn.Linear(hidden_dim, latent_dim_gen)
         
         # Initial regime prior uses concatenated encoder outputs
         self.r0_logits = nn.Linear(hidden_dim * 2, num_regimes)
@@ -42,15 +43,15 @@ class LatentSSM(nn.Module):
         self.posterior_lstm_d = nn.LSTM(demand_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=False)
         self.posterior_lstm_g = nn.LSTM(gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=False)
         self.post_r_logits = nn.Linear(hidden_dim * 2, num_regimes)
-        self.post_z_mean_d = nn.Linear(hidden_dim, latent_dim)
-        self.post_z_raw_var_d = nn.Linear(hidden_dim, latent_dim)
-        self.post_z_mean_g = nn.Linear(hidden_dim, latent_dim)
-        self.post_z_raw_var_g = nn.Linear(hidden_dim, latent_dim)
+        self.post_z_mean_d = nn.Linear(hidden_dim, latent_dim_demand)
+        self.post_z_raw_var_d = nn.Linear(hidden_dim, latent_dim_demand)
+        self.post_z_mean_g = nn.Linear(hidden_dim, latent_dim_gen)
+        self.post_z_raw_var_g = nn.Linear(hidden_dim, latent_dim_gen)
         
         # 3. Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
         self.prior_r_net = nn.Sequential(
-            nn.Linear(latent_dim * 2 + num_regimes + self.processed_known_dim, hidden_dim),
+            nn.Linear(latent_dim_demand + latent_dim_gen + num_regimes + self.processed_known_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, num_regimes)
         )
@@ -59,24 +60,24 @@ class LatentSSM(nn.Module):
         # Separate experts for Demand and Gen
         self.prior_z_experts_demand = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(latent_dim + self.processed_known_dim, hidden_dim),
+                nn.Linear(latent_dim_demand + self.processed_known_dim, hidden_dim),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for demand
+                nn.Linear(hidden_dim, latent_dim_demand * 2) # mean, raw_var for demand
             ) for _ in range(num_regimes)
         ])
         
         self.prior_z_experts_gen = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(latent_dim + self.processed_known_dim, hidden_dim),
+                nn.Linear(latent_dim_gen + self.processed_known_dim, hidden_dim),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, latent_dim * 2) # mean, raw_var for gen
+                nn.Linear(hidden_dim, latent_dim_gen * 2) # mean, raw_var for gen
             ) for _ in range(num_regimes)
         ])
         
         # 4. Probabilistic Emission
         # +1 for horizon-aware variance feature (normalized horizon step h/horizon)
         self.emit_demand = nn.Sequential(
-            nn.Linear(latent_dim + self.processed_known_dim + 1, hidden_dim),
+            nn.Linear(latent_dim_demand + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -85,7 +86,7 @@ class LatentSSM(nn.Module):
         self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes)])
         
         self.emit_gen = nn.Sequential(
-            nn.Linear(latent_dim + self.processed_known_dim + 1, hidden_dim),
+            nn.Linear(latent_dim_gen + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -258,8 +259,8 @@ class LatentSSM(nn.Module):
             z_out_d = torch.einsum('bk,bkd->bd', r_next, expert_outputs_d)
             z_out_g = torch.einsum('bk,bkd->bd', r_next, expert_outputs_g)
             
-            z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim, dim=-1)
-            z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim, dim=-1)
+            z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim_demand, dim=-1)
+            z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim_gen, dim=-1)
             
             # Fix #5: Initialize prior networks with identity (residual connection)
             # Using z_curr (the previous state) directly
@@ -287,9 +288,10 @@ class LatentSSM(nn.Module):
             if self.training and target_seq is not None and mask_tf is not None:
                 z_post_d = self.reparameterize_gaussian(post_z_mean_d_seq[:, t, :], post_z_var_d_seq[:, t, :])
                 z_post_g = self.reparameterize_gaussian(post_z_mean_g_seq[:, t, :], post_z_var_g_seq[:, t, :])
-                mask_tf_z = mask_tf.expand_as(z_post_d)
-                z_next_d = torch.where(mask_tf_z, z_post_d, z_prior_d)
-                z_next_g = torch.where(mask_tf_z, z_post_g, z_prior_g)
+                mask_tf_z_d = mask_tf.expand_as(z_post_d)
+                mask_tf_z_g = mask_tf.expand_as(z_post_g)
+                z_next_d = torch.where(mask_tf_z_d, z_post_d, z_prior_d)
+                z_next_g = torch.where(mask_tf_z_g, z_post_g, z_prior_g)
             else:
                 z_next_d = z_prior_d
                 z_next_g = z_prior_g

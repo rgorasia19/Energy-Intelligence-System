@@ -67,7 +67,8 @@ def evaluate():
     
     seq_len = 60
     horizon = 30
-    latent_dim = 16
+    latent_dim_demand = 16
+    latent_dim_gen = 24
     hidden_dim = 64
     num_regimes = 4
     
@@ -84,7 +85,8 @@ def evaluate():
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
         known_dim=known_dim,
-        latent_dim=latent_dim,
+        latent_dim_demand=latent_dim_demand,
+        latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
         num_regimes=num_regimes,
         fourier_dim=len(fourier_cols)
