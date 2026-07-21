@@ -66,7 +66,8 @@ def train():
     latent_dim_demand = 16
     latent_dim_gen = 24
     hidden_dim = 64
-    num_regimes = 4
+    dem_num_regimes = 4
+    gen_num_regimes = 6
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
@@ -98,7 +99,8 @@ def train():
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
-        num_regimes=num_regimes,
+        dem_num_regimes=dem_num_regimes,
+        gen_num_regimes=gen_num_regimes,
         dropout=0.2,
         fourier_dim=len(fourier_cols)
     ).to(device)
@@ -127,7 +129,8 @@ def train():
             "latent_dim_demand": latent_dim_demand,
             "latent_dim_gen": latent_dim_gen,
             "hidden_dim": hidden_dim,
-            "num_regimes": num_regimes,
+            "dem_num_regimes": dem_num_regimes,
+            "gen_num_regimes": gen_num_regimes,
             "batch_size": batch_size,
             "learning_rate": 1e-3,
         })

@@ -57,8 +57,10 @@ def run_diagnostics():
     horizon = 30
     latent_dim_demand = 16
     latent_dim_gen = 24
+    latent_dim = latent_dim_demand + latent_dim_gen
     hidden_dim = 64
-    num_regimes = 4
+    dem_num_regimes = 4
+    gen_num_regimes = 6
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
@@ -76,7 +78,8 @@ def run_diagnostics():
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
-        num_regimes=num_regimes,
+        dem_num_regimes=dem_num_regimes,
+        gen_num_regimes=gen_num_regimes,
         fourier_dim=len(fourier_cols)
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
@@ -140,8 +143,9 @@ def run_diagnostics():
             all_g_true.append(dec_targets[:, :, gen_idx])
             all_mask.append(dec_masks[:, :, demand_idx])
             
-            all_z_seq.append(outputs['sampled_z_seq'].cpu().numpy())
-            all_r_seq.append(outputs['sampled_r_seq'].cpu().numpy())
+            sampled_z = torch.cat([outputs['sampled_z_d_seq'], outputs['sampled_z_g_seq']], dim=-1)
+            all_z_seq.append(sampled_z.cpu().numpy())
+            all_r_seq.append(outputs['sampled_r_d_seq'].cpu().numpy())
             all_features.append(dec_inputs[:, :, -known_dim:].cpu().numpy())
             
     d_mean = np.concatenate(all_d_mean, axis=0)
@@ -220,7 +224,7 @@ def run_diagnostics():
     # 4. Regime Transition Matrix
     print("4. Plotting Regime Transition Matrix...")
     r_labels = np.argmax(r_seq, axis=-1)
-    transitions = np.zeros((num_regimes, num_regimes))
+    transitions = np.zeros((dem_num_regimes, dem_num_regimes))
     for b in range(r_labels.shape[0]):
         for t in range(horizon - 1):
             curr_r = r_labels[b, t]

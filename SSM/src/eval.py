@@ -70,7 +70,8 @@ def evaluate():
     latent_dim_demand = 16
     latent_dim_gen = 24
     hidden_dim = 64
-    num_regimes = 4
+    dem_num_regimes = 4
+    gen_num_regimes = 6
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
@@ -88,7 +89,8 @@ def evaluate():
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
-        num_regimes=num_regimes,
+        dem_num_regimes=dem_num_regimes,
+        gen_num_regimes=gen_num_regimes,
         fourier_dim=len(fourier_cols)
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
@@ -265,7 +267,7 @@ def evaluate():
             # Concatenate split latents for evaluation plots/stats
             sampled_z = torch.cat([outputs['sampled_z_d_seq'], outputs['sampled_z_g_seq']], dim=-1)
             all_z_seq.append(sampled_z.cpu().numpy())
-            all_r_seq.append(outputs['sampled_r_seq'].cpu().numpy())
+            all_r_seq.append(outputs['sampled_r_d_seq'].cpu().numpy())
             
     # Concatenate all batches
     demand_mean = np.concatenate(all_demand_mean, axis=0)
@@ -356,7 +358,7 @@ def evaluate():
             nu = out['demand_nu'][0, :, 0].cpu().numpy()
             emissions = mean + np.random.standard_t(df=np.maximum(nu, 2.001)) * scale
             samples.append(emissions)
-            r_outs.append(np.argmax(out['sampled_r_seq'][0].cpu().numpy(), axis=-1))
+            r_outs.append(np.argmax(out['sampled_r_d_seq'][0].cpu().numpy(), axis=-1))
             
         samples = np.array(samples)
         p10 = np.percentile(samples, 10, axis=0)
