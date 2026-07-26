@@ -423,7 +423,8 @@ class LatentSSM(nn.Module):
         }
 
 class SSMLoss(nn.Module):
-    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.2, pinball_weight=0.5, occ_weight=10.0, min_occupancy=0.15):
+    def __init__(self, kl_z_weight=1.0, kl_r_weight=1.0, entropy_weight=0.2, pinball_weight=0.5, occ_weight=10.0, min_occupancy=0.15,
+                 kl_z_gen_mult=2.0, kl_r_gen_mult=2.0, gen_smoothness_weight=1.0, gen_switching_weight=5.0, gen_semantic_weight=10.0):
         super().__init__()
         self.kl_z_weight = kl_z_weight
         self.kl_r_weight = kl_r_weight
@@ -431,6 +432,13 @@ class SSMLoss(nn.Module):
         self.pinball_weight = pinball_weight
         self.occ_weight = occ_weight
         self.min_occupancy = min_occupancy
+        
+        # New regularization weights
+        self.kl_z_gen_mult = kl_z_gen_mult
+        self.kl_r_gen_mult = kl_r_gen_mult
+        self.gen_smoothness_weight = gen_smoothness_weight
+        self.gen_switching_weight = gen_switching_weight
+        self.gen_semantic_weight = gen_semantic_weight
         
     def kl_divergence_gaussian(self, q_mu, q_var, p_mu, p_var):
         # KL(q || p) = 0.5 * [log(p_var/q_var) + (q_var + (q_mu - p_mu)^2)/p_var - 1]
@@ -578,6 +586,8 @@ class SSMLoss(nn.Module):
         mi_loss = 0.0
         util_loss = 0.0
         semantic_anchor_loss = 0.0
+        semantic_gen_loss = 0.0
+        switching_penalty_g = 0.0
         
         latent_consistency_loss = 0.0
         if post_z_mean_d is not None:
@@ -595,11 +605,11 @@ class SSMLoss(nn.Module):
             
             kl_z_d = torch.clamp(kl_z_d_raw - self.free_bits_z, min=0.0).mean()
             kl_z_g = torch.clamp(kl_z_g_raw - self.free_bits_z, min=0.0).mean()
-            kl_z = kl_z_d + kl_z_g
+            kl_z = kl_z_d + self.kl_z_gen_mult * kl_z_g
             
             kl_r_d = torch.clamp(kl_r_d_raw - self.free_bits_r, min=0.0).mean()
             kl_r_g = torch.clamp(kl_r_g_raw - self.free_bits_r, min=0.0).mean()
-            kl_r = kl_r_d + kl_r_g
+            kl_r = kl_r_d + self.kl_r_gen_mult * kl_r_g
             
             # Entropy Regularization
             entropy_r_d = self.entropy_categorical(post_r_logits_d).mean()
@@ -641,6 +651,47 @@ class SSMLoss(nn.Module):
                 semantic_anchor_loss = 10.0 * F.cross_entropy(extreme_logits, target_regime)
             else:
                 semantic_anchor_loss = 0.0
+                
+            # Generation Semantic Anchor (if enabled and weight > 0)
+            if self.gen_semantic_weight > 0.0:
+                # Target columns: GAS=0, COAL=1, NUCLEAR=2, WIND=3, GENERATION=4
+                # Regime 0 -> High Wind (>90th percentile of WIND)
+                wind_col = target_gen[:, :, 3]
+                q90_wind = torch.quantile(wind_col, 0.9)
+                wind_mask = wind_col > q90_wind
+                
+                # Regime 1 -> High Fossil (>90th percentile of GAS + COAL)
+                fossil_col = target_gen[:, :, 0] + target_gen[:, :, 1]
+                q90_fossil = torch.quantile(fossil_col, 0.9)
+                fossil_mask = fossil_col > q90_fossil
+                
+                semantic_gen_loss_wind = 0.0
+                semantic_gen_loss_fossil = 0.0
+                
+                if wind_mask.any():
+                    wind_logits = post_r_logits_g[wind_mask]
+                    target_regime_wind = torch.zeros(wind_logits.size(0), dtype=torch.long, device=wind_logits.device)
+                    semantic_gen_loss_wind = F.cross_entropy(wind_logits, target_regime_wind)
+                    
+                if fossil_mask.any():
+                    fossil_logits = post_r_logits_g[fossil_mask]
+                    target_regime_fossil = torch.ones(fossil_logits.size(0), dtype=torch.long, device=fossil_logits.device)
+                    semantic_gen_loss_fossil = F.cross_entropy(fossil_logits, target_regime_fossil)
+                
+                semantic_gen_loss = self.gen_semantic_weight * (semantic_gen_loss_wind + semantic_gen_loss_fossil)
+            else:
+                semantic_gen_loss = 0.0
+            
+            # Combine semantic anchor losses
+            semantic_anchor_loss = semantic_anchor_loss + semantic_gen_loss
+
+            # Generation Regime Switching Penalty: penalizes rapid changes in posterior regime assignment
+            if self.gen_switching_weight > 0.0 and post_r_logits_g.size(1) > 1:
+                q_r_g = F.softmax(post_r_logits_g, dim=-1)
+                # L1 distance between adjacent timesteps
+                switching_penalty_g = F.l1_loss(q_r_g[:, 1:, :], q_r_g[:, :-1, :], reduction='mean') * self.gen_switching_weight
+            else:
+                switching_penalty_g = 0.0
             
         # KL Annealing: gradual monotonic warmup to avoid posterior/prior fighting early training
         warmup_kl = max(1, int(total_epochs * 0.2))
@@ -653,14 +704,14 @@ class SSMLoss(nn.Module):
         if prior_z_mean_d.size(1) > 1:
             diff_d = prior_z_mean_d[:, 1:, :] - prior_z_mean_d[:, :-1, :]
             diff_g = prior_z_mean_g[:, 1:, :] - prior_z_mean_g[:, :-1, :]
-            smoothness_loss = 0.1 * ((diff_d ** 2).sum(dim=-1).mean() + (diff_g ** 2).sum(dim=-1).mean())
+            smoothness_loss = 0.1 * (diff_d ** 2).sum(dim=-1).mean() + self.gen_smoothness_weight * (diff_g ** 2).sum(dim=-1).mean()
         else:
             smoothness_loss = 0.0
             
         # Latent L2 Regularization (replacing clamp)
         latent_l2_reg = 0.01 * ((prior_z_mean_d ** 2).mean() + (prior_z_mean_g ** 2).mean())
         
-        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + width_loss + scale_floor_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg
+        total_loss = recon_loss + mean_anchor_loss + pinball_loss + coverage_loss + width_loss + scale_floor_loss + consistency_loss + anneal_factor * (self.kl_z_weight * kl_z + self.kl_r_weight * kl_r) - self.entropy_weight * entropy_r + mi_loss + util_loss + semantic_anchor_loss + smoothness_loss + latent_l2_reg + switching_penalty_g
         
         return total_loss, {
             'loss_demand': loss_demand_per_item.mean().item(),
@@ -674,6 +725,8 @@ class SSMLoss(nn.Module):
             'consistency_loss': consistency_loss.item() if isinstance(consistency_loss, torch.Tensor) else consistency_loss,
             'latent_consistency_loss': latent_consistency_loss.item() if isinstance(latent_consistency_loss, torch.Tensor) else latent_consistency_loss,
             'semantic_anchor_loss': semantic_anchor_loss.item() if isinstance(semantic_anchor_loss, torch.Tensor) else semantic_anchor_loss,
+            'semantic_gen_loss': semantic_gen_loss.item() if isinstance(semantic_gen_loss, torch.Tensor) else semantic_gen_loss,
+            'switching_penalty_g': switching_penalty_g.item() if isinstance(switching_penalty_g, torch.Tensor) else switching_penalty_g,
             'smoothness_loss': smoothness_loss.item() if isinstance(smoothness_loss, torch.Tensor) else smoothness_loss,
             'util_loss': util_loss.item() if isinstance(util_loss, torch.Tensor) else util_loss,
             'avg_nu_demand': demand_nu.mean().item(),
