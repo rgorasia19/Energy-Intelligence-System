@@ -102,7 +102,9 @@ def train():
         dem_num_regimes=dem_num_regimes,
         gen_num_regimes=gen_num_regimes,
         dropout=0.2,
-        fourier_dim=len(fourier_cols)
+        fourier_dim=len(fourier_cols),
+        bidirectional_d=False,
+        bidirectional_g=True
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, dem_num_regimes=4, gen_num_regimes=6, dropout=0.2, fourier_dim=12, fourier_embed_dim=16):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, dem_num_regimes=4, gen_num_regimes=6, dropout=0.2, fourier_dim=12, fourier_embed_dim=16, bidirectional_d=False, bidirectional_g=False):
         super().__init__()
         self.latent_dim_demand = latent_dim_demand
         self.latent_dim_gen = latent_dim_gen
@@ -13,6 +13,11 @@ class LatentSSM(nn.Module):
         self.dem_num_regimes = dem_num_regimes
         self.gen_num_regimes = gen_num_regimes
         self.fourier_dim = fourier_dim
+        self.bidirectional_d = bidirectional_d
+        self.bidirectional_g = bidirectional_g
+        
+        mult_d = 2 if bidirectional_d else 1
+        mult_g = 2 if bidirectional_g else 1
         
         self.fourier_embed = nn.Sequential(
             nn.Linear(fourier_dim, hidden_dim),
@@ -42,14 +47,14 @@ class LatentSSM(nn.Module):
         
         # 2. Bidirectional Smoothing Posterior
         # Takes future targets + known futures to infer optimal z_t and r_t
-        self.posterior_lstm_d = nn.LSTM(demand_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=False)
-        self.posterior_lstm_g = nn.LSTM(gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=False)
-        self.post_r_logits_d = nn.Linear(hidden_dim * 2, dem_num_regimes)
-        self.post_r_logits_g = nn.Linear(hidden_dim * 2, gen_num_regimes)
-        self.post_z_mean_d = nn.Linear(hidden_dim, latent_dim_demand)
-        self.post_z_raw_var_d = nn.Linear(hidden_dim, latent_dim_demand)
-        self.post_z_mean_g = nn.Linear(hidden_dim, latent_dim_gen)
-        self.post_z_raw_var_g = nn.Linear(hidden_dim, latent_dim_gen)
+        self.posterior_lstm_d = nn.LSTM(demand_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=bidirectional_d)
+        self.posterior_lstm_g = nn.LSTM(gen_dim + self.processed_known_dim, hidden_dim, batch_first=True, bidirectional=bidirectional_g)
+        self.post_r_logits_d = nn.Linear(hidden_dim * (mult_d + mult_g), dem_num_regimes)
+        self.post_r_logits_g = nn.Linear(hidden_dim * (mult_d + mult_g), gen_num_regimes)
+        self.post_z_mean_d = nn.Linear(hidden_dim * mult_d, latent_dim_demand)
+        self.post_z_raw_var_d = nn.Linear(hidden_dim * mult_d, latent_dim_demand)
+        self.post_z_mean_g = nn.Linear(hidden_dim * mult_g, latent_dim_gen)
+        self.post_z_raw_var_g = nn.Linear(hidden_dim * mult_g, latent_dim_gen)
         
         # 3. Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)

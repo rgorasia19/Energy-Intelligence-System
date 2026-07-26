@@ -91,7 +91,9 @@ def evaluate():
         hidden_dim=hidden_dim,
         dem_num_regimes=dem_num_regimes,
         gen_num_regimes=gen_num_regimes,
-        fourier_dim=len(fourier_cols)
+        fourier_dim=len(fourier_cols),
+        bidirectional_d=False,
+        bidirectional_g=True
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     
