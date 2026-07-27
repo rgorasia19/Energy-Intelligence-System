@@ -55,7 +55,7 @@ def train():
     target_cols = col_info['target_columns']
     
     demand_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
-    gen_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'SOLAR', 'BIOMASS', 'IMPORTS', 'GENERATION']
+    gen_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'SOLAR', 'IMPORTS', 'GENERATION']
     
     demand_idx = [target_cols.index(c) for c in demand_cols]
     gen_idx = [target_cols.index(c) for c in gen_cols]
