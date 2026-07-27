@@ -20,7 +20,7 @@ def main():
     # Define which columns are continuous vs flow
     demand_flow_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
     demand_cont_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
-    gen_flow_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'GENERATION']
+    gen_flow_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'SOLAR', 'BIOMASS', 'IMPORTS', 'GENERATION']
     weather_cont_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     macro_cont_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     
