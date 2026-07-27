@@ -91,6 +91,7 @@ def train():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, 
                             num_workers=num_workers, pin_memory=(device=="cuda"))
 
+    demand_indices = [feature_cols.index(c) for c in demand_cols]
     model = LatentSSM(
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
@@ -104,7 +105,8 @@ def train():
         dropout=0.2,
         fourier_dim=len(fourier_cols),
         bidirectional_d=False,
-        bidirectional_g=True
+        bidirectional_g=True,
+        demand_indices=demand_indices
     ).to(device)
 
     optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-2)

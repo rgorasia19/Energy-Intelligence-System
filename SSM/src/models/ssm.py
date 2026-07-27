@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, dem_num_regimes=4, gen_num_regimes=6, dropout=0.2, fourier_dim=12, fourier_embed_dim=16, bidirectional_d=False, bidirectional_g=False):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, dem_num_regimes=4, gen_num_regimes=6, dropout=0.2, fourier_dim=12, fourier_embed_dim=16, bidirectional_d=False, bidirectional_g=False, demand_indices=None):
         super().__init__()
         self.latent_dim_demand = latent_dim_demand
         self.latent_dim_gen = latent_dim_gen
@@ -15,6 +15,7 @@ class LatentSSM(nn.Module):
         self.fourier_dim = fourier_dim
         self.bidirectional_d = bidirectional_d
         self.bidirectional_g = bidirectional_g
+        self.demand_indices = demand_indices
         
         mult_d = 2 if bidirectional_d else 1
         mult_g = 2 if bidirectional_g else 1
@@ -35,7 +36,8 @@ class LatentSSM(nn.Module):
         # 1. Past Encoder (for z0)
         # Separate pathways for demand and gen
         self.encoder_gru_d = nn.GRU(input_dim, hidden_dim, batch_first=True)
-        self.encoder_gru_g = nn.GRU(input_dim, hidden_dim, batch_first=True)
+        # Gen encoder takes both demand AND gen history
+        self.encoder_gru_g = nn.GRU(input_dim + demand_dim, hidden_dim, batch_first=True)
         self.z0_mean_d = nn.Linear(hidden_dim, latent_dim_demand)
         self.z0_raw_var_d = nn.Linear(hidden_dim, latent_dim_demand)
         self.z0_mean_g = nn.Linear(hidden_dim, latent_dim_gen)
@@ -64,7 +66,7 @@ class LatentSSM(nn.Module):
             nn.Linear(hidden_dim, dem_num_regimes)
         )
         self.prior_r_net_g = nn.Sequential(
-            nn.Linear(latent_dim_gen + gen_num_regimes + self.processed_known_dim + demand_dim, hidden_dim),
+            nn.Linear(latent_dim_gen + gen_num_regimes + self.processed_known_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, gen_num_regimes)
         )
@@ -81,7 +83,7 @@ class LatentSSM(nn.Module):
         
         self.prior_z_experts_gen = nn.ModuleList([
             nn.Sequential(
-                nn.Linear(latent_dim_gen + self.processed_known_dim + demand_dim, hidden_dim),
+                nn.Linear(latent_dim_gen + self.processed_known_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, latent_dim_gen * 2) # mean, raw_var for gen
             ) for _ in range(gen_num_regimes)
@@ -99,7 +101,7 @@ class LatentSSM(nn.Module):
         self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(dem_num_regimes)])
         
         self.emit_gen = nn.Sequential(
-            nn.Linear(latent_dim_gen + self.processed_known_dim + 1 + demand_dim, hidden_dim),
+            nn.Linear(latent_dim_gen + self.processed_known_dim + 1, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
@@ -169,7 +171,12 @@ class LatentSSM(nn.Module):
         
         # 1. Encode past for z0 and r0
         _, h_n_d = self.encoder_gru_d(encoder_inputs)
-        _, h_n_g = self.encoder_gru_g(encoder_inputs)
+        if self.demand_indices is not None:
+            demand_inputs = encoder_inputs[:, :, self.demand_indices]
+            encoder_input_gen = torch.cat([encoder_inputs, demand_inputs], dim=-1)
+        else:
+            encoder_input_gen = torch.cat([encoder_inputs, encoder_inputs[:, :, :self.demand_dim]], dim=-1)
+        _, h_n_g = self.encoder_gru_g(encoder_input_gen)
         h_t_d = h_n_d[-1]
         h_t_g = h_n_g[-1]
         h_t_joint = torch.cat([h_t_d, h_t_g], dim=-1)
@@ -230,17 +237,17 @@ class LatentSSM(nn.Module):
         sampled_z_g_seq = []
         sampled_r_d_seq = []
         sampled_r_g_seq = []
-        demand_mean_seq = []
         
         for t in range(horizon):
             u_t = processed_decoder_inputs[:, t, :]
             
-            # --- DEMAND PATHWAY ---
-            
-            # Prior Regime Transition (Demand)
+            # Prior Regime Transition
             r_prior_input_d = torch.cat([z_curr_d, r_curr_d, u_t], dim=-1)
+            r_prior_input_g = torch.cat([z_curr_g, r_curr_g, u_t], dim=-1)
             r_logits_d = self.prior_r_net_d(r_prior_input_d)
+            r_logits_g = self.prior_r_net_g(r_prior_input_g)
             prior_r_logits_d_seq.append(r_logits_d)
+            prior_r_logits_g_seq.append(r_logits_g)
             
             # Generate shared per-sample teacher forcing mask between z and r
             if self.training and target_seq is not None:
@@ -248,106 +255,80 @@ class LatentSSM(nn.Module):
             else:
                 mask_tf = None
                 
-            # Sample prior and posterior regime states (Demand)
+            # Sample prior and posterior regime states, then select branch with torch.where
             if self.training:
                 r_prior_d = self.sample_regime(r_logits_d, tau=tau, hard=False, k_blend=2)
+                r_prior_g = self.sample_regime(r_logits_g, tau=tau, hard=False, k_blend=2)
             elif sample:
                 r_prior_d = self.sample_regime(r_logits_d, tau=tau, hard=True)
+                r_prior_g = self.sample_regime(r_logits_g, tau=tau, hard=True)
             else:
                 r_prior_d = F.one_hot(torch.argmax(r_logits_d, dim=-1), num_classes=self.dem_num_regimes).float()
+                r_prior_g = F.one_hot(torch.argmax(r_logits_g, dim=-1), num_classes=self.gen_num_regimes).float()
                 
             if self.training and target_seq is not None and mask_tf is not None:
                 r_post_d = self.sample_regime(post_r_logits_d_seq[:, t, :], tau=tau, hard=False, k_blend=2)
+                r_post_g = self.sample_regime(post_r_logits_g_seq[:, t, :], tau=tau, hard=False, k_blend=2)
                 mask_tf_r_d = mask_tf.expand_as(r_post_d)
+                mask_tf_r_g = mask_tf.expand_as(r_post_g)
                 r_next_d = torch.where(mask_tf_r_d, r_post_d, r_prior_d)
+                r_next_g = torch.where(mask_tf_r_g, r_post_g, r_prior_g)
             else:
                 r_next_d = r_prior_d
+                r_next_g = r_prior_g
                 
-            # Prior Continuous Transition (Demand - Mixture of Experts)
+            # Prior Continuous Transition (Mixture of Experts)
             z_prior_input_d = torch.cat([z_curr_d, u_t], dim=-1)
+            z_prior_input_g = torch.cat([z_curr_g, u_t], dim=-1)
             
+            # Compute outputs for all K experts
             expert_outputs_d = []
             for k in range(self.dem_num_regimes):
                 expert_outputs_d.append(self.prior_z_experts_demand[k](z_prior_input_d))
             expert_outputs_d = torch.stack(expert_outputs_d, dim=1) # [batch, dem_num_regimes, latent_dim_demand * 2]
-            
-            z_out_d = torch.einsum('bk,bkd->bd', r_next_d, expert_outputs_d)
-            z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim_demand, dim=-1)
-            z_mean_d = z_mean_d + z_curr_d
-            z_var_d = self._get_var(z_raw_var_d, is_demand=True)
-            
-            prior_z_mean_d_seq.append(z_mean_d)
-            prior_z_var_d_seq.append(z_var_d)
-            
-            # Sample prior and posterior z (Demand)
-            if self.training or sample:
-                z_prior_d = self.reparameterize_gaussian(z_mean_d, z_var_d)
-            else:
-                z_prior_d = z_mean_d
-                
-            if self.training and target_seq is not None and mask_tf is not None:
-                z_post_d = self.reparameterize_gaussian(post_z_mean_d_seq[:, t, :], post_z_var_d_seq[:, t, :])
-                mask_tf_z_d = mask_tf.expand_as(z_post_d)
-                z_next_d = torch.where(mask_tf_z_d, z_post_d, z_prior_d)
-            else:
-                z_next_d = z_prior_d
-                
-            # Compute step t predicted demand mean
-            h_t = torch.full((batch_size, 1), (t + 1) / float(horizon), device=device, dtype=torch.float32)
-            emit_input_d_t = torch.cat([z_next_d, u_t, h_t], dim=-1)
-            demand_features_t = self.emit_demand(emit_input_d_t)
-            demand_mean_t = self.demand_mean(demand_features_t)
-            demand_mean_seq.append(demand_mean_t)
-            
-            # --- GENERATION PATHWAY (HIERARCHICAL) ---
-            
-            # Prior Regime Transition (Gen) using demand_mean_t
-            r_prior_input_g = torch.cat([z_curr_g, r_curr_g, u_t, demand_mean_t], dim=-1)
-            r_logits_g = self.prior_r_net_g(r_prior_input_g)
-            prior_r_logits_g_seq.append(r_logits_g)
-            
-            # Sample prior and posterior regime states (Gen)
-            if self.training:
-                r_prior_g = self.sample_regime(r_logits_g, tau=tau, hard=False, k_blend=2)
-            elif sample:
-                r_prior_g = self.sample_regime(r_logits_g, tau=tau, hard=True)
-            else:
-                r_prior_g = F.one_hot(torch.argmax(r_logits_g, dim=-1), num_classes=self.gen_num_regimes).float()
-                
-            if self.training and target_seq is not None and mask_tf is not None:
-                r_post_g = self.sample_regime(post_r_logits_g_seq[:, t, :], tau=tau, hard=False, k_blend=2)
-                mask_tf_r_g = mask_tf.expand_as(r_post_g)
-                r_next_g = torch.where(mask_tf_r_g, r_post_g, r_prior_g)
-            else:
-                r_next_g = r_prior_g
-                
-            # Prior Continuous Transition (Gen - Mixture of Experts) using demand_mean_t
-            z_prior_input_g = torch.cat([z_curr_g, u_t, demand_mean_t], dim=-1)
             
             expert_outputs_g = []
             for k in range(self.gen_num_regimes):
                 expert_outputs_g.append(self.prior_z_experts_gen[k](z_prior_input_g))
             expert_outputs_g = torch.stack(expert_outputs_g, dim=1) # [batch, gen_num_regimes, latent_dim_gen * 2]
             
+            # Weighted sum over experts using r_next_d and r_next_g
+            z_out_d = torch.einsum('bk,bkd->bd', r_next_d, expert_outputs_d)
             z_out_g = torch.einsum('bk,bkd->bd', r_next_g, expert_outputs_g)
+            
+            z_mean_d, z_raw_var_d = torch.split(z_out_d, self.latent_dim_demand, dim=-1)
             z_mean_g, z_raw_var_g = torch.split(z_out_g, self.latent_dim_gen, dim=-1)
+            
+            # Fix #5: Initialize prior networks with identity (residual connection)
+            # Using z_curr (the previous state) directly
+            z_mean_d = z_mean_d + z_curr_d
             z_mean_g = z_mean_g + z_curr_g
+            
+            z_var_d = self._get_var(z_raw_var_d, is_demand=True)
             z_var_g = self._get_var(z_raw_var_g, is_demand=False)
             
+            prior_z_mean_d_seq.append(z_mean_d)
+            prior_z_var_d_seq.append(z_var_d)
             prior_z_mean_g_seq.append(z_mean_g)
             prior_z_var_g_seq.append(z_var_g)
             
-            # Sample prior and posterior z (Gen)
+            # Sample prior and posterior z
             if self.training or sample:
+                z_prior_d = self.reparameterize_gaussian(z_mean_d, z_var_d)
                 z_prior_g = self.reparameterize_gaussian(z_mean_g, z_var_g)
             else:
+                z_prior_d = z_mean_d
                 z_prior_g = z_mean_g
                 
             if self.training and target_seq is not None and mask_tf is not None:
+                z_post_d = self.reparameterize_gaussian(post_z_mean_d_seq[:, t, :], post_z_var_d_seq[:, t, :])
                 z_post_g = self.reparameterize_gaussian(post_z_mean_g_seq[:, t, :], post_z_var_g_seq[:, t, :])
+                mask_tf_z_d = mask_tf.expand_as(z_post_d)
                 mask_tf_z_g = mask_tf.expand_as(z_post_g)
+                z_next_d = torch.where(mask_tf_z_d, z_post_d, z_prior_d)
                 z_next_g = torch.where(mask_tf_z_g, z_post_g, z_prior_g)
             else:
+                z_next_d = z_prior_d
                 z_next_g = z_prior_g
                 
             sampled_z_d_seq.append(z_next_d)
@@ -372,18 +353,18 @@ class LatentSSM(nn.Module):
         sampled_z_g_seq = torch.stack(sampled_z_g_seq, dim=1)
         sampled_r_d_seq = torch.stack(sampled_r_d_seq, dim=1)
         sampled_r_g_seq = torch.stack(sampled_r_g_seq, dim=1)
-        demand_mean_seq = torch.stack(demand_mean_seq, dim=1)
         
         # 4. Probabilistic Emission (Mixture of Experts)
+        # We need horizon-aware variance features
         h_steps = torch.arange(1, horizon + 1, dtype=torch.float32, device=device).unsqueeze(1) / float(horizon)
         h_steps = h_steps.expand(batch_size, horizon, 1)
         
         # Emission Inputs
         emit_input_d = torch.cat([sampled_z_d_seq, processed_decoder_inputs, h_steps], dim=-1)
-        emit_input_g = torch.cat([sampled_z_g_seq, processed_decoder_inputs, h_steps, demand_mean_seq], dim=-1)
+        emit_input_g = torch.cat([sampled_z_g_seq, processed_decoder_inputs, h_steps], dim=-1)
         
         demand_features = self.emit_demand(emit_input_d)
-        demand_mean = demand_mean_seq
+        demand_mean = self.demand_mean(demand_features)
         
         gen_features = self.emit_gen(emit_input_g)
         gen_mean = self.gen_mean(gen_features)

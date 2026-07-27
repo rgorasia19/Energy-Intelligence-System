@@ -70,6 +70,7 @@ def run_diagnostics():
     known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
     
+    demand_indices = [feature_cols.index(c) for c in demand_cols]
     model = LatentSSM(
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
@@ -82,7 +83,8 @@ def run_diagnostics():
         gen_num_regimes=gen_num_regimes,
         fourier_dim=len(fourier_cols),
         bidirectional_d=False,
-        bidirectional_g=True
+        bidirectional_g=True,
+        demand_indices=demand_indices
     )
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
     
