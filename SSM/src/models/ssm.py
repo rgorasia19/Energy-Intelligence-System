@@ -301,8 +301,9 @@ class LatentSSM(nn.Module):
             
             # Fix #5: Initialize prior networks with identity (residual connection)
             # Using z_curr (the previous state) directly
-            z_mean_d = z_mean_d + z_curr_d
-            z_mean_g = z_mean_g + z_curr_g
+            # Leaky latent transition (mean reversion to prevent long-term drift)
+            z_mean_d = z_mean_d + 0.95 * z_curr_d
+            z_mean_g = z_mean_g + 0.95 * z_curr_g
             
             z_var_d = self._get_var(z_raw_var_d, is_demand=True)
             z_var_g = self._get_var(z_raw_var_g, is_demand=False)

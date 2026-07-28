@@ -71,7 +71,11 @@ def train():
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
-    calendar_cols = ['is_bank_holiday'] if 'is_bank_holiday' in feature_cols else []
+    calendar_cols = []
+    if 'is_bank_holiday' in feature_cols:
+        calendar_cols.append('is_bank_holiday')
+    if 'is_weekend' in feature_cols:
+        calendar_cols.append('is_weekend')
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     

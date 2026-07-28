@@ -82,6 +82,11 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     day_of_week = df.index.dayofweek
     day_of_year = df.index.dayofyear
     
+    import holidays
+    uk_holidays = holidays.UnitedKingdom()
+    new_cols['is_bank_holiday'] = [int(date in uk_holidays) for date in df.index]
+    new_cols['is_weekend'] = [int(date.dayofweek >= 5) for date in df.index]
+    
     # Fourier terms K=3
     for k in range(1, 4):
         new_cols[f'day_of_week_sin_k{k}'] = np.sin(2 * np.pi * k * day_of_week / 7.0)

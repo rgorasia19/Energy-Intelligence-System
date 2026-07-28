@@ -13,3 +13,4 @@ torch
 dagshub
 python-dotenv
 statsmodels
+holidays
