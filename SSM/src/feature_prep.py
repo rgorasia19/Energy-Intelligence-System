@@ -87,6 +87,23 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     new_cols['is_bank_holiday'] = [int(date in uk_holidays) for date in df.index]
     new_cols['is_weekend'] = [int(date.dayofweek >= 5) for date in df.index]
     
+    # Theoretical Wind Generation (Simplified Turbine Power Curve)
+    v = df['windspeed_10m']
+    wind_factor = np.zeros_like(v)
+    mask_active = (v >= 3.0) & (v < 12.0)
+    mask_rated = (v >= 12.0) & (v <= 25.0)
+    wind_factor[mask_active] = ((v[mask_active] - 3.0) / (12.0 - 3.0)) ** 3
+    wind_factor[mask_rated] = 1.0
+    wind_cap = df['EMBEDDED_WIND_CAPACITY'].fillna(0)
+    new_cols['theoretical_wind_generation'] = wind_factor * wind_cap
+    
+    # Theoretical Solar Generation (Radiation * Inverse Cloud Cover)
+    rad = df['shortwave_radiation']
+    cloud = df['cloudcover'] / 100.0
+    solar_factor = rad * (1.0 - 0.7 * cloud)
+    solar_cap = df['EMBEDDED_SOLAR_CAPACITY'].fillna(0)
+    new_cols['theoretical_solar_generation'] = solar_factor * solar_cap
+    
     # Fourier terms K=3
     for k in range(1, 4):
         new_cols[f'day_of_week_sin_k{k}'] = np.sin(2 * np.pi * k * day_of_week / 7.0)

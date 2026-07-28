@@ -76,10 +76,15 @@ def train():
         calendar_cols.append('is_bank_holiday')
     if 'is_weekend' in feature_cols:
         calendar_cols.append('is_weekend')
+    physical_cols = []
+    if 'theoretical_wind_generation' in feature_cols:
+        physical_cols.append('theoretical_wind_generation')
+    if 'theoretical_solar_generation' in feature_cols:
+        physical_cols.append('theoretical_solar_generation')
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     
-    known_columns = fourier_cols + weather_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
+    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
     known_dim = len(known_columns)
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
