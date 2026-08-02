@@ -88,15 +88,21 @@ def evaluate():
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     price_cols = ['day_ahead_price']
-    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols if c in feature_cols]
-    known_dim = len(known_columns)
+    remit_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
+    
+    known_demand_cols = fourier_cols + weather_cols + physical_cols + calendar_cols
+    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols if c in feature_cols]
+    
+    known_dim_d = len(known_demand_cols)
+    known_dim_g = len(known_gen_cols)
     
     demand_indices = [feature_cols.index(c) for c in demand_cols]
     model = LatentSSM(
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
-        known_dim=known_dim,
+        known_dim_d=known_dim_d,
+        known_dim_g=known_dim_g,
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
@@ -114,8 +120,8 @@ def evaluate():
     
     batch_size = 256
     test_dataset = SSMDataset(test_data, seq_len=seq_len, horizon=horizon, 
-                              feature_columns=feature_cols, target_columns=target_cols,
-                              known_columns=known_columns)
+                             feature_columns=feature_cols, target_columns=target_cols,
+                             known_demand_columns=known_demand_cols, known_gen_columns=known_gen_cols)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -128,10 +134,11 @@ def evaluate():
     with torch.no_grad():
         diag_batch = next(iter(test_loader))
         val_encoder = diag_batch['encoder_inputs'].to(device)
-        val_decoder = diag_batch['decoder_inputs'].to(device)
+        val_decoder_d = diag_batch['decoder_inputs_d'].to(device)
+        val_decoder_g = diag_batch['decoder_inputs_g'].to(device)
         val_targets = diag_batch['decoder_targets'].to(device)
         
-        outputs = model(val_encoder, val_decoder, horizon, sample=False)
+        outputs = model(val_encoder, val_decoder_d, val_decoder_g, horizon, sample=False)
         
         demand_var = (outputs['demand_nu'] / (outputs['demand_nu'] - 2.0)) * (outputs['demand_scale'] ** 2)
         target_demand_std = val_targets[:, :, demand_idx].std()
@@ -182,7 +189,7 @@ def evaluate():
         print(f"Mean error as multiple of target_std: {mean_error.mean() / target_demand.std():.1f}x")
         
         # Posterior vs Prior gap
-        outputs_post = model(val_encoder, val_decoder, horizon, target_seq=val_targets, sample=False)
+        outputs_post = model(val_encoder, val_decoder_d, val_decoder_g, horizon, target_seq=val_targets, sample=False)
         post_mean_error = torch.abs(outputs_post['demand_mean'] - target_demand)
         print(f"\nPrior-only MAE: {mean_error.mean():.4f}")
         print(f"Posterior+Prior MAE: {post_mean_error.mean():.4f}")
@@ -227,18 +234,17 @@ def evaluate():
     with torch.no_grad():
         for batch in test_loader:
             enc_inputs = batch['encoder_inputs'].to(device)
-            dec_inputs = batch['decoder_inputs'].to(device)
+            decoder_inputs_d = batch['decoder_inputs_d'].to(device)
+            decoder_inputs_g = batch['decoder_inputs_g'].to(device)
             dec_targets = batch['decoder_targets'].numpy()
             dec_masks = batch['decoder_mask'].numpy()
-            
-
             
             N = 50
             batch_demand_samples = []
             batch_gen_samples = []
             
             for _ in range(N):
-                outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=True, tau=1.0)
+                outputs = model(enc_inputs, decoder_inputs_d, decoder_inputs_g, horizon, target_seq=None, sample=True, tau=1.0)
                 
                 d_mean = outputs['demand_mean'].cpu().numpy()
                 d_scale = outputs['demand_scale'].cpu().numpy()
@@ -358,7 +364,8 @@ def evaluate():
     
     print("Generating Fan Chart...")
     sample_enc = test_dataset[0]['encoder_inputs'].unsqueeze(0).to(device)
-    sample_dec = test_dataset[0]['decoder_inputs'].unsqueeze(0).to(device)
+    sample_dec_d = test_dataset[0]['decoder_inputs_d'].unsqueeze(0).to(device)
+    sample_dec_g = test_dataset[0]['decoder_inputs_g'].unsqueeze(0).to(device)
     sample_true = test_dataset[0]['decoder_targets'][:, demand_idx[0]].numpy()
     
     with torch.no_grad():
@@ -366,7 +373,7 @@ def evaluate():
         samples = []
         r_outs = []
         for _ in range(N):
-            out = model(sample_enc, sample_dec, horizon, sample=True, tau=0.5)
+            out = model(sample_enc, sample_dec_d, sample_dec_g, horizon, sample=True, tau=0.5)
             mean = out['demand_mean'][0, :, 0].cpu().numpy()
             scale = out['demand_scale'][0, :, 0].cpu().numpy()
             nu = out['demand_nu'][0, :, 0].cpu().numpy()

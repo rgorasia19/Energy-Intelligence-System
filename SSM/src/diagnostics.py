@@ -77,15 +77,21 @@ def run_diagnostics():
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     price_cols = ['day_ahead_price']
-    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols if c in feature_cols]
-    known_dim = len(known_columns)
+    remit_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
+    
+    known_demand_cols = fourier_cols + weather_cols + physical_cols + calendar_cols
+    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols if c in feature_cols]
+    
+    known_dim_d = len(known_demand_cols)
+    known_dim_g = len(known_gen_cols)
     
     demand_indices = [feature_cols.index(c) for c in demand_cols]
     model = LatentSSM(
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
-        known_dim=known_dim,
+        known_dim_d=known_dim_d,
+        known_dim_g=known_dim_g,
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
@@ -104,7 +110,7 @@ def run_diagnostics():
     batch_size = 256
     test_dataset = SSMDataset(test_data, seq_len=seq_len, horizon=horizon, 
                               feature_columns=feature_cols, target_columns=target_cols,
-                              known_columns=known_columns)
+                              known_demand_columns=known_demand_cols, known_gen_columns=known_gen_cols)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -123,18 +129,19 @@ def run_diagnostics():
     all_features = []
 
     print("--- Running Inference ---")
-    with torch.no_grad():
-        for batch in test_loader:
-            enc_inputs = batch['encoder_inputs'].to(device)
-            dec_inputs = batch['decoder_inputs'].to(device)
-            dec_targets = batch['decoder_targets'].numpy()
-            dec_masks = batch['decoder_mask'].numpy()
-            
-            N = 50
-            batch_d_samples = []
-            batch_g_samples = []
+    for batch in test_loader:
+        enc_inputs = batch['encoder_inputs'].to(device)
+        decoder_inputs_d = batch['decoder_inputs_d'].to(device)
+        decoder_inputs_g = batch['decoder_inputs_g'].to(device)
+        dec_targets = batch['decoder_targets'].numpy()
+        dec_masks = batch['decoder_mask'].numpy()
+        
+        N = 50
+        batch_d_samples = []
+        batch_g_samples = []
+        with torch.no_grad():
             for _ in range(N):
-                outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, sample=True, tau=1.0)
+                outputs = model(enc_inputs, decoder_inputs_d, decoder_inputs_g, horizon, target_seq=None, sample=True, tau=1.0)
                 d_scale = outputs['demand_scale'].cpu().numpy()
                 d_nu = outputs['demand_nu'].cpu().numpy()
                 d_sample = outputs['demand_mean'].cpu().numpy() + np.random.standard_t(df=np.maximum(d_nu, 2.001)) * d_scale

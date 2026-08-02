@@ -84,16 +84,20 @@ def train():
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     price_cols = ['day_ahead_price']
+    remit_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
     
-    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols if c in feature_cols]
-    known_dim = len(known_columns)
+    known_demand_cols = fourier_cols + weather_cols + physical_cols + calendar_cols
+    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols if c in feature_cols]
+    
+    known_dim_d = len(known_demand_cols)
+    known_dim_g = len(known_gen_cols)
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
                                feature_columns=feature_cols, target_columns=target_cols,
-                               known_columns=known_columns)
+                               known_demand_columns=known_demand_cols, known_gen_columns=known_gen_cols)
     val_dataset = SSMDataset(val_data, seq_len=seq_len, horizon=horizon, 
                              feature_columns=feature_cols, target_columns=target_cols,
-                             known_columns=known_columns)
+                             known_demand_columns=known_demand_cols, known_gen_columns=known_gen_cols)
     
     num_workers = 4 if device == "cuda" else 0
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, 
@@ -106,7 +110,8 @@ def train():
         input_dim=len(feature_cols),
         demand_dim=len(demand_cols),
         gen_dim=len(gen_cols),
-        known_dim=known_dim,
+        known_dim_d=known_dim_d,
+        known_dim_g=known_dim_g,
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
@@ -168,14 +173,16 @@ def train():
                 
             for batch in train_loader:
                 enc_inputs = batch['encoder_inputs'].to(device)
-                dec_inputs = batch['decoder_inputs'].to(device)
+                dec_inputs_d = batch['decoder_inputs_d'].to(device)
+                dec_inputs_g = batch['decoder_inputs_g'].to(device)
                 dec_targets = batch['decoder_targets'].to(device)
                 dec_masks = batch['decoder_mask'].to(device)
                 
                 # Curriculum horizon
                 current_horizon = max_horizon
                 
-                dec_inputs_trunc = dec_inputs[:, :current_horizon, :]
+                dec_inputs_d_trunc = dec_inputs_d[:, :current_horizon, :]
+                dec_inputs_g_trunc = dec_inputs_g[:, :current_horizon, :]
                 dec_targets_trunc = dec_targets[:, :current_horizon, :]
                 dec_masks_trunc = dec_masks[:, :current_horizon, :]
                 
@@ -191,11 +198,12 @@ def train():
                 
                 K = 5
                 enc_inputs_k = enc_inputs.repeat_interleave(K, dim=0)
-                dec_inputs_trunc_k = dec_inputs_trunc.repeat_interleave(K, dim=0)
+                dec_inputs_d_trunc_k = dec_inputs_d_trunc.repeat_interleave(K, dim=0)
+                dec_inputs_g_trunc_k = dec_inputs_g_trunc.repeat_interleave(K, dim=0)
                 dec_targets_trunc_k = dec_targets_trunc.repeat_interleave(K, dim=0)
                 dec_masks_trunc_k = dec_masks_trunc.repeat_interleave(K, dim=0)
                 
-                outputs = model(enc_inputs_k, dec_inputs_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau, tf_ratio=tf_ratio)
+                outputs = model(enc_inputs_k, dec_inputs_d_trunc_k, dec_inputs_g_trunc_k, current_horizon, target_seq=dec_targets_trunc_k, tau=tau, tf_ratio=tf_ratio)
                 
                 # Reduce free bits 10x
                 loss, metrics = criterion(outputs, dec_targets_trunc_k, dec_masks_trunc_k, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.05, free_bits_r=0.1, k_samples=K)
@@ -219,13 +227,14 @@ def train():
             with torch.no_grad():
                 for batch in val_loader:
                     enc_inputs = batch['encoder_inputs'].to(device)
-                    dec_inputs = batch['decoder_inputs'].to(device)
-                    dec_targets = batch['decoder_targets'].to(device)
-                    dec_masks = batch['decoder_mask'].to(device)
+                    decoder_inputs_d = batch['decoder_inputs_d'].to(device)
+                    decoder_inputs_g = batch['decoder_inputs_g'].to(device)
+                    decoder_targets = batch['decoder_targets'].to(device)
+                    decoder_mask = batch['decoder_mask'].to(device)
                     
-                    outputs = model(enc_inputs, dec_inputs, horizon, target_seq=None, tau=0.5) # use 0.5 in eval for harder choices
+                    outputs = model(enc_inputs, decoder_inputs_d, decoder_inputs_g, horizon, target_seq=None, tau=0.5)
                     
-                    loss, metrics = criterion(outputs, dec_targets, dec_masks, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.0, free_bits_r=0.0)
+                    loss, metrics = criterion(outputs, decoder_targets, decoder_mask, demand_idx, gen_idx, epoch, epochs, free_bits_z=0.0, free_bits_r=0.0)
                     
                     val_loss += loss.item()
                     for k in val_metrics_sum:

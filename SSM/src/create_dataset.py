@@ -21,6 +21,11 @@ def main():
         df_prices = pd.read_csv(os.path.join(raw_dir, 'wholesale_prices.csv'))
     else:
         df_prices = pd.DataFrame(columns=['DATETIME', 'day_ahead_price'])
+        
+    if os.path.exists(os.path.join(raw_dir, 'remit_capacity.csv')):
+        df_remit = pd.read_csv(os.path.join(raw_dir, 'remit_capacity.csv'))
+    else:
+        df_remit = pd.DataFrame(columns=['DATETIME', 'nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity'])
     
     # Define which columns are continuous vs flow
     demand_flow_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
@@ -29,6 +34,7 @@ def main():
     weather_cont_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     macro_cont_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
     price_cont_cols = ['day_ahead_price']
+    remit_cont_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
     
     print("Standardising timeseries...")
     df_demand_daily = standardise_timeseries(df_demand, 'DATETIME', continuous_cols=demand_cont_cols, flow_cols=demand_flow_cols)
@@ -40,6 +46,11 @@ def main():
         df_prices_daily = standardise_timeseries(df_prices, 'DATETIME', continuous_cols=price_cont_cols, flow_cols=[])
     else:
         df_prices_daily = pd.DataFrame()
+        
+    if not df_remit.empty:
+        df_remit_daily = standardise_timeseries(df_remit, 'DATETIME', continuous_cols=remit_cont_cols, flow_cols=[])
+    else:
+        df_remit_daily = pd.DataFrame()
     
     # 2. Merge
     print("Merging features...")
@@ -51,6 +62,8 @@ def main():
     }
     if not df_prices_daily.empty:
         dfs['PRICE_'] = df_prices_daily
+    if not df_remit_daily.empty:
+        dfs['REMIT_'] = df_remit_daily
     # This will outer join and fill missingness masks, starting from 2001-01-01
     merged = merge_features(dfs, start_date='2001-01-01')
     
