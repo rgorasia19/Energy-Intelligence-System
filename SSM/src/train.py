@@ -83,8 +83,9 @@ def train():
         physical_cols.append('theoretical_solar_generation')
     embedded_cols = ['EMBEDDED_WIND_CAPACITY', 'EMBEDDED_SOLAR_CAPACITY']
     macro_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
+    price_cols = ['day_ahead_price']
     
-    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols if c in feature_cols]
+    known_columns = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols if c in feature_cols]
     known_dim = len(known_columns)
 
     train_dataset = SSMDataset(train_data, seq_len=seq_len, horizon=horizon, 
