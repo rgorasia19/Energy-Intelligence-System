@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class LatentSSM(nn.Module):
-    def __init__(self, input_dim, demand_dim, gen_dim, known_dim_d=5, known_dim_g=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, dem_num_regimes=4, gen_num_regimes=6, dropout=0.2, fourier_dim=12, fourier_embed_dim=16, bidirectional_d=False, bidirectional_g=False, demand_indices=None):
+    def __init__(self, input_dim, demand_dim, gen_dim, known_dim_d=5, known_dim_g=5, latent_dim_demand=16, latent_dim_gen=24, hidden_dim=64, num_regimes_demand=4, num_regimes_gen=8, dropout=0.2, fourier_dim=12, fourier_embed_dim=16, bidirectional_d=False, bidirectional_g=False, demand_indices=None):
         super().__init__()
         self.latent_dim_demand = latent_dim_demand
         self.latent_dim_gen = latent_dim_gen
@@ -11,8 +11,8 @@ class LatentSSM(nn.Module):
         self.gen_dim = gen_dim
         self.known_dim_d = known_dim_d
         self.known_dim_g = known_dim_g
-        self.dem_num_regimes = dem_num_regimes
-        self.gen_num_regimes = gen_num_regimes
+        self.num_regimes_demand = num_regimes_demand
+        self.num_regimes_gen = num_regimes_gen
         self.fourier_dim = fourier_dim
         self.bidirectional_d = bidirectional_d
         self.bidirectional_g = bidirectional_g
@@ -46,15 +46,15 @@ class LatentSSM(nn.Module):
         self.z0_raw_var_g = nn.Linear(hidden_dim, latent_dim_gen)
         
         # Initial regime prior uses concatenated encoder outputs
-        self.r0_logits_d = nn.Linear(hidden_dim * 2, dem_num_regimes)
-        self.r0_logits_g = nn.Linear(hidden_dim * 2, gen_num_regimes)
+        self.r0_logits_demand = nn.Linear(hidden_dim * 2, num_regimes_demand)
+        self.r0_logits_gen = nn.Linear(hidden_dim * 2, num_regimes_gen)
         
         # 2. Bidirectional Smoothing Posterior
         # Takes future targets + known futures to infer optimal z_t and r_t
         self.posterior_lstm_d = nn.LSTM(demand_dim + self.processed_known_dim_d, hidden_dim, batch_first=True, bidirectional=bidirectional_d)
         self.posterior_lstm_g = nn.LSTM(gen_dim + self.processed_known_dim_g, hidden_dim, batch_first=True, bidirectional=bidirectional_g)
-        self.post_r_logits_d = nn.Linear(hidden_dim * (mult_d + mult_g), dem_num_regimes)
-        self.post_r_logits_g = nn.Linear(hidden_dim * (mult_d + mult_g), gen_num_regimes)
+        self.post_r_logits_d = nn.Linear(hidden_dim * (mult_d + mult_g), num_regimes_demand)
+        self.post_r_logits_g = nn.Linear(hidden_dim * (mult_d + mult_g), num_regimes_gen)
         self.post_z_mean_d = nn.Linear(hidden_dim * mult_d, latent_dim_demand)
         self.post_z_raw_var_d = nn.Linear(hidden_dim * mult_d, latent_dim_demand)
         self.post_z_mean_g = nn.Linear(hidden_dim * mult_g, latent_dim_gen)
@@ -62,15 +62,15 @@ class LatentSSM(nn.Module):
         
         # Prior Transition Dynamics
         # Regime transition: p(r_t | r_{t-1}, z_{t-1}, u_t)
-        self.prior_r_net_d = nn.Sequential(
-            nn.Linear(latent_dim_demand + dem_num_regimes + self.processed_known_dim_d, hidden_dim),
+        self.prior_r_net_demand = nn.Sequential(
+            nn.Linear(latent_dim_demand + num_regimes_demand + self.processed_known_dim_d, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, dem_num_regimes)
+            nn.Linear(hidden_dim, num_regimes_demand)
         )
-        self.prior_r_net_g = nn.Sequential(
-            nn.Linear(latent_dim_gen + gen_num_regimes + self.processed_known_dim_g, hidden_dim),
+        self.prior_r_net_gen = nn.Sequential(
+            nn.Linear(latent_dim_gen + num_regimes_gen + self.processed_known_dim_g, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, gen_num_regimes)
+            nn.Linear(hidden_dim, num_regimes_gen)
         )
         
         # Continuous transition: p(z_t | z_{t-1}, r_t, u_t)
@@ -80,7 +80,7 @@ class LatentSSM(nn.Module):
                 nn.Linear(latent_dim_demand + self.processed_known_dim_d, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, latent_dim_demand * 2) # mean, raw_var for demand
-            ) for _ in range(dem_num_regimes)
+            ) for _ in range(num_regimes_demand)
         ])
         
         self.prior_z_experts_gen = nn.ModuleList([
@@ -88,7 +88,7 @@ class LatentSSM(nn.Module):
                 nn.Linear(latent_dim_gen + self.processed_known_dim_g, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, latent_dim_gen * 2) # mean, raw_var for gen
-            ) for _ in range(gen_num_regimes)
+            ) for _ in range(num_regimes_gen)
         ])
         
         # 4. Probabilistic Emission
@@ -99,8 +99,8 @@ class LatentSSM(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.demand_mean = nn.Linear(hidden_dim, demand_dim)
-        self.demand_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(dem_num_regimes)])
-        self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(dem_num_regimes)])
+        self.demand_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes_demand)])
+        self.demand_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, demand_dim) for _ in range(num_regimes_demand)])
         
         self.emit_gen = nn.Sequential(
             nn.Linear(latent_dim_gen + self.processed_known_dim_g + 1, hidden_dim),
@@ -108,8 +108,8 @@ class LatentSSM(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
         self.gen_mean = nn.Linear(hidden_dim, gen_dim)
-        self.gen_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(gen_num_regimes)])
-        self.gen_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(gen_num_regimes)])
+        self.gen_scale_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes_gen)])
+        self.gen_nu_heads = nn.ModuleList([nn.Linear(hidden_dim, gen_dim) for _ in range(num_regimes_gen)])
         
         # Initialize scale heads to start with a strong baseline bias
         for head in self.demand_scale_heads:
@@ -190,19 +190,19 @@ class LatentSSM(nn.Module):
         z0_mean_g = self.z0_mean_g(h_t_g)
         z0_var_g = self._get_var(self.z0_raw_var_g(h_t_g), is_demand=False)
         
-        r0_logits_d = self.r0_logits_d(h_t_joint)
-        r0_logits_g = self.r0_logits_g(h_t_joint)
+        r0_logits_demand = self.r0_logits_demand(h_t_joint)
+        r0_logits_gen = self.r0_logits_gen(h_t_joint)
         
         if self.training or sample:
             z_curr_d = self.reparameterize_gaussian(z0_mean_d, z0_var_d)
             z_curr_g = self.reparameterize_gaussian(z0_mean_g, z0_var_g)
-            r_curr_d = self.sample_regime(r0_logits_d, tau=tau, hard=True)
-            r_curr_g = self.sample_regime(r0_logits_g, tau=tau, hard=True)
+            r_curr_d = self.sample_regime(r0_logits_demand, tau=tau, hard=True)
+            r_curr_g = self.sample_regime(r0_logits_gen, tau=tau, hard=True)
         else:
             z_curr_d = z0_mean_d
             z_curr_g = z0_mean_g
-            r_curr_d = F.one_hot(torch.argmax(r0_logits_d, dim=-1), num_classes=self.dem_num_regimes).float()
-            r_curr_g = F.one_hot(torch.argmax(r0_logits_g, dim=-1), num_classes=self.gen_num_regimes).float()
+            r_curr_d = F.one_hot(torch.argmax(r0_logits_demand, dim=-1), num_classes=self.num_regimes_demand).float()
+            r_curr_g = F.one_hot(torch.argmax(r0_logits_gen, dim=-1), num_classes=self.num_regimes_gen).float()
             
         # 2. Infer Posterior (if training)
         post_r_logits_d_seq = None
@@ -249,8 +249,8 @@ class LatentSSM(nn.Module):
             # Prior Regime Transition
             r_prior_input_d = torch.cat([z_curr_d, r_curr_d, u_t_d], dim=-1)
             r_prior_input_g = torch.cat([z_curr_g, r_curr_g, u_t_g], dim=-1)
-            r_logits_d = self.prior_r_net_d(r_prior_input_d)
-            r_logits_g = self.prior_r_net_g(r_prior_input_g)
+            r_logits_d = self.prior_r_net_demand(r_prior_input_d)
+            r_logits_g = self.prior_r_net_gen(r_prior_input_g)
             prior_r_logits_d_seq.append(r_logits_d)
             prior_r_logits_g_seq.append(r_logits_g)
             
@@ -268,8 +268,8 @@ class LatentSSM(nn.Module):
                 r_prior_d = self.sample_regime(r_logits_d, tau=tau, hard=True)
                 r_prior_g = self.sample_regime(r_logits_g, tau=tau, hard=True)
             else:
-                r_prior_d = F.one_hot(torch.argmax(r_logits_d, dim=-1), num_classes=self.dem_num_regimes).float()
-                r_prior_g = F.one_hot(torch.argmax(r_logits_g, dim=-1), num_classes=self.gen_num_regimes).float()
+                r_prior_d = F.one_hot(torch.argmax(r_logits_d, dim=-1), num_classes=self.num_regimes_demand).float()
+                r_prior_g = F.one_hot(torch.argmax(r_logits_g, dim=-1), num_classes=self.num_regimes_gen).float()
                 
             if self.training and target_seq is not None and mask_tf is not None:
                 r_post_d = self.sample_regime(post_r_logits_d_seq[:, t, :], tau=tau, hard=False, k_blend=2)
@@ -288,14 +288,14 @@ class LatentSSM(nn.Module):
             
             # Compute outputs for all K experts
             expert_outputs_d = []
-            for k in range(self.dem_num_regimes):
+            for k in range(self.num_regimes_demand):
                 expert_outputs_d.append(self.prior_z_experts_demand[k](z_prior_input_d))
-            expert_outputs_d = torch.stack(expert_outputs_d, dim=1) # [batch, dem_num_regimes, latent_dim_demand * 2]
+            expert_outputs_d = torch.stack(expert_outputs_d, dim=1) # [batch, num_regimes_demand, latent_dim_demand * 2]
             
             expert_outputs_g = []
-            for k in range(self.gen_num_regimes):
+            for k in range(self.num_regimes_gen):
                 expert_outputs_g.append(self.prior_z_experts_gen[k](z_prior_input_g))
-            expert_outputs_g = torch.stack(expert_outputs_g, dim=1) # [batch, gen_num_regimes, latent_dim_gen * 2]
+            expert_outputs_g = torch.stack(expert_outputs_g, dim=1) # [batch, num_regimes_gen, latent_dim_gen * 2]
             
             # Weighted sum over experts using r_next_d and r_next_g
             z_out_d = torch.einsum('bk,bkd->bd', r_next_d, expert_outputs_d)
@@ -405,8 +405,8 @@ class LatentSSM(nn.Module):
             'z0_var_d': z0_var_d,
             'z0_mean_g': z0_mean_g,
             'z0_var_g': z0_var_g,
-            'r0_logits_d': r0_logits_d,
-            'r0_logits_g': r0_logits_g,
+            'r0_logits_demand': r0_logits_demand,
+            'r0_logits_gen': r0_logits_gen,
             'post_r_logits_d_seq': post_r_logits_d_seq,
             'post_r_logits_g_seq': post_r_logits_g_seq,
             'post_z_mean_d_seq': post_z_mean_d_seq,

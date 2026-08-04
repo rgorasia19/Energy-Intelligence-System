@@ -66,8 +66,8 @@ def train():
     latent_dim_demand = 16
     latent_dim_gen = 24
     hidden_dim = 64
-    dem_num_regimes = 4
-    gen_num_regimes = 6
+    num_regimes_demand = 4
+    num_regimes_gen = 6
 
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
@@ -86,8 +86,14 @@ def train():
     price_cols = ['day_ahead_price']
     remit_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
     
+    advanced_gen_cols = [
+        'nuclear_availability_gap', 'nuclear_forward_drop_3d', 'nuclear_inertia_proxy',
+        'freq_excursion_flag', 'freq_p99_dev', 'curtailment_composite_index',
+        'imbalance_volatility', 'system_stress_alert'
+    ]
+    
     known_demand_cols = fourier_cols + weather_cols + physical_cols + calendar_cols
-    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols if c in feature_cols]
+    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols + advanced_gen_cols if c in feature_cols]
     
     known_dim_d = len(known_demand_cols)
     known_dim_g = len(known_gen_cols)
@@ -115,8 +121,8 @@ def train():
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
-        dem_num_regimes=dem_num_regimes,
-        gen_num_regimes=gen_num_regimes,
+        num_regimes_demand=num_regimes_demand,
+        num_regimes_gen=num_regimes_gen,
         dropout=0.2,
         fourier_dim=len(fourier_cols),
         bidirectional_d=False,
@@ -156,8 +162,8 @@ def train():
             "latent_dim_demand": latent_dim_demand,
             "latent_dim_gen": latent_dim_gen,
             "hidden_dim": hidden_dim,
-            "dem_num_regimes": dem_num_regimes,
-            "gen_num_regimes": gen_num_regimes,
+            "num_regimes_demand": num_regimes_demand,
+            "num_regimes_gen": num_regimes_gen,
             "batch_size": batch_size,
             "learning_rate": 1e-3,
         })

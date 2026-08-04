@@ -17,15 +17,32 @@ def main():
     df_weather = pd.read_csv(os.path.join(raw_dir, 'weather_data.csv'))
     df_macro = pd.read_csv(os.path.join(raw_dir, 'macro_data.csv'))
     
-    if os.path.exists(os.path.join(raw_dir, 'wholesale_prices.csv')):
+    if os.path.exists(os.path.join(raw_dir, 'wholesale_prices_advanced.csv')):
+        df_prices = pd.read_csv(os.path.join(raw_dir, 'wholesale_prices_advanced.csv'))
+    elif os.path.exists(os.path.join(raw_dir, 'wholesale_prices.csv')):
         df_prices = pd.read_csv(os.path.join(raw_dir, 'wholesale_prices.csv'))
     else:
-        df_prices = pd.DataFrame(columns=['DATETIME', 'day_ahead_price'])
+        df_prices = pd.DataFrame(columns=['DATETIME', 'day_ahead_price', 'imbalance_volatility', 'negative_price_duration'])
         
     if os.path.exists(os.path.join(raw_dir, 'remit_capacity.csv')):
         df_remit = pd.read_csv(os.path.join(raw_dir, 'remit_capacity.csv'))
     else:
         df_remit = pd.DataFrame(columns=['DATETIME', 'nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity'])
+        
+    if os.path.exists(os.path.join(raw_dir, 'nuclear_outturn.csv')):
+        df_nuc = pd.read_csv(os.path.join(raw_dir, 'nuclear_outturn.csv'))
+    else:
+        df_nuc = pd.DataFrame(columns=['DATETIME', 'nuclear_outturn'])
+        
+    if os.path.exists(os.path.join(raw_dir, 'system_stress_alerts.csv')):
+        df_warn = pd.read_csv(os.path.join(raw_dir, 'system_stress_alerts.csv'))
+    else:
+        df_warn = pd.DataFrame(columns=['DATETIME', 'stress_alert_flag'])
+        
+    if os.path.exists(os.path.join(raw_dir, 'system_frequency_stats.csv')):
+        df_freq = pd.read_csv(os.path.join(raw_dir, 'system_frequency_stats.csv'))
+    else:
+        df_freq = pd.DataFrame(columns=['DATETIME', 'freq_excursion_flag', 'freq_p99_dev'])
     
     # Define which columns are continuous vs flow
     demand_flow_cols = ['ND', 'TSD', 'ENGLAND_WALES_DEMAND']
@@ -33,8 +50,11 @@ def main():
     gen_flow_cols = ['GAS', 'COAL', 'NUCLEAR', 'WIND', 'SOLAR', 'IMPORTS', 'GENERATION']
     weather_cont_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     macro_cont_cols = ['uk_cpi', 'uk_gdp_index', 'bank_rate']
-    price_cont_cols = ['day_ahead_price']
+    price_cont_cols = ['day_ahead_price', 'imbalance_volatility', 'negative_price_duration']
     remit_cont_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
+    nuc_cont_cols = ['nuclear_outturn']
+    warn_cont_cols = ['stress_alert_flag']
+    freq_cont_cols = ['freq_excursion_flag', 'freq_p99_dev']
     
     print("Standardising timeseries...")
     df_demand_daily = standardise_timeseries(df_demand, 'DATETIME', continuous_cols=demand_cont_cols, flow_cols=demand_flow_cols)
@@ -51,6 +71,21 @@ def main():
         df_remit_daily = standardise_timeseries(df_remit, 'DATETIME', continuous_cols=remit_cont_cols, flow_cols=[])
     else:
         df_remit_daily = pd.DataFrame()
+        
+    if not df_nuc.empty:
+        df_nuc_daily = standardise_timeseries(df_nuc, 'DATETIME', continuous_cols=nuc_cont_cols, flow_cols=[])
+    else:
+        df_nuc_daily = pd.DataFrame()
+        
+    if not df_warn.empty:
+        df_warn_daily = standardise_timeseries(df_warn, 'DATETIME', continuous_cols=warn_cont_cols, flow_cols=[])
+    else:
+        df_warn_daily = pd.DataFrame()
+        
+    if not df_freq.empty:
+        df_freq_daily = standardise_timeseries(df_freq, 'DATETIME', continuous_cols=freq_cont_cols, flow_cols=[])
+    else:
+        df_freq_daily = pd.DataFrame()
     
     # 2. Merge
     print("Merging features...")
@@ -64,6 +99,12 @@ def main():
         dfs['PRICE_'] = df_prices_daily
     if not df_remit_daily.empty:
         dfs['REMIT_'] = df_remit_daily
+    if not df_nuc_daily.empty:
+        dfs['NUC_'] = df_nuc_daily
+    if not df_warn_daily.empty:
+        dfs['WARN_'] = df_warn_daily
+    if not df_freq_daily.empty:
+        dfs['FREQ_'] = df_freq_daily
     # This will outer join and fill missingness masks, starting from 2001-01-01
     merged = merge_features(dfs, start_date='2001-01-01')
     

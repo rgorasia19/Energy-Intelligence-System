@@ -59,8 +59,8 @@ def run_diagnostics():
     latent_dim_gen = 24
     latent_dim = latent_dim_demand + latent_dim_gen
     hidden_dim = 64
-    dem_num_regimes = 4
-    gen_num_regimes = 6
+    num_regimes_demand = 4
+    num_regimes_gen = 6
     
     weather_cols = ['temperature_2m', 'cloudcover', 'windspeed_10m', 'shortwave_radiation']
     fourier_cols = [c for c in feature_cols if '_sin_k' in c or '_cos_k' in c]
@@ -95,8 +95,8 @@ def run_diagnostics():
         latent_dim_demand=latent_dim_demand,
         latent_dim_gen=latent_dim_gen,
         hidden_dim=hidden_dim,
-        dem_num_regimes=dem_num_regimes,
-        gen_num_regimes=gen_num_regimes,
+        num_regimes_demand=num_regimes_demand,
+        num_regimes_gen=num_regimes_gen,
         fourier_dim=len(fourier_cols),
         bidirectional_d=False,
         bidirectional_g=True,
@@ -245,7 +245,7 @@ def run_diagnostics():
     # 4. Regime Transition Matrix
     print("4. Plotting Regime Transition Matrix...")
     r_labels = np.argmax(r_seq, axis=-1)
-    transitions = np.zeros((dem_num_regimes, dem_num_regimes))
+    transitions = np.zeros((num_regimes_demand, num_regimes_demand))
     for b in range(r_labels.shape[0]):
         for t in range(horizon - 1):
             curr_r = r_labels[b, t]

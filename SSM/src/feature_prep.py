@@ -98,11 +98,38 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     new_cols['theoretical_wind_generation'] = wind_factor * wind_cap
     
     # Theoretical Solar Generation (Radiation * Inverse Cloud Cover)
-    rad = df['shortwave_radiation']
-    cloud = df['cloudcover'] / 100.0
-    solar_factor = rad * (1.0 - 0.7 * cloud)
-    solar_cap = df['EMBEDDED_SOLAR_CAPACITY'].fillna(0)
+    rad = df['WEATHER_shortwave_radiation'] if 'WEATHER_shortwave_radiation' in df.columns else df['shortwave_radiation']
+    cloud = df['WEATHER_cloudcover'] if 'WEATHER_cloudcover' in df.columns else df['cloudcover']
+    solar_factor = rad * (1.0 - 0.7 * (cloud / 100.0))
+    solar_cap = df['DEMAND_EMBEDDED_SOLAR_CAPACITY'] if 'DEMAND_EMBEDDED_SOLAR_CAPACITY' in df.columns else df['EMBEDDED_SOLAR_CAPACITY'].fillna(0)
     new_cols['theoretical_solar_generation'] = solar_factor * solar_cap
+    
+    # Advanced Generation Signals
+    
+    # 1. Nuclear Inertia & Ramping
+    if 'REMIT_nuclear_available_capacity' in df.columns and 'NUC_nuclear_outturn' in df.columns:
+        # Gap between what is mechanically available vs what is actually running
+        new_cols['nuclear_availability_gap'] = df['REMIT_nuclear_available_capacity'] - df['NUC_nuclear_outturn']
+        # Forward lookahead for planned drops
+        new_cols['nuclear_forward_drop_3d'] = df['REMIT_nuclear_available_capacity'] - df['REMIT_nuclear_available_capacity'].shift(-3).fillna(df['REMIT_nuclear_available_capacity'])
+        new_cols['nuclear_inertia_proxy'] = df['NUC_nuclear_outturn']
+        
+    # 2. Curtailment Composite Proxy
+    # High wind + low demand + negative wholesale price duration
+    if 'PRICE_negative_price_duration' in df.columns:
+        wind_gen = new_cols['theoretical_wind_generation']
+        demand = df['DEMAND_ND'] if 'DEMAND_ND' in df.columns else df['ND']
+        neg_price_dur = df['PRICE_negative_price_duration']
+        # Composite index: Higher when wind is high, demand is low, and prices stay negative
+        new_cols['curtailment_composite_index'] = (neg_price_dur * wind_gen) / (demand + 1e-6)
+        new_cols['imbalance_volatility'] = df['PRICE_imbalance_volatility']
+        
+    # 3. System Stress Alerts and Frequency Tail-Risk
+    if 'WARN_stress_alert_flag' in df.columns:
+        new_cols['system_stress_alert'] = df['WARN_stress_alert_flag']
+    if 'FREQ_freq_excursion_flag' in df.columns:
+        new_cols['freq_excursion_flag'] = df['FREQ_freq_excursion_flag']
+        new_cols['freq_p99_dev'] = df['FREQ_freq_p99_dev']
     
     # Fourier terms K=3
     for k in range(1, 4):
