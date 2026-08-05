@@ -79,8 +79,14 @@ def run_diagnostics():
     price_cols = ['day_ahead_price']
     remit_cols = ['nuclear_available_capacity', 'gas_available_capacity', 'coal_available_capacity']
     
+    advanced_gen_cols = [
+        'nuclear_availability_gap', 'nuclear_forward_drop_3d', 'nuclear_inertia_proxy',
+        'freq_excursion_flag', 'freq_p99_dev', 'curtailment_composite_index',
+        'imbalance_volatility', 'system_stress_alert'
+    ]
+    
     known_demand_cols = fourier_cols + weather_cols + physical_cols + calendar_cols
-    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols if c in feature_cols]
+    known_gen_cols = fourier_cols + weather_cols + physical_cols + calendar_cols + [c for c in embedded_cols + macro_cols + price_cols + remit_cols + advanced_gen_cols if c in feature_cols]
     
     known_dim_d = len(known_demand_cols)
     known_dim_g = len(known_gen_cols)
